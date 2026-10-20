@@ -1,0 +1,1230 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="ROSETTA 通用个人助手：身份、配置、工作目录、会话快照与权限边界。单文件离线讲义。"><title>ROSETTA · 身份、配置与会话边界</title><style>
+:root{color-scheme:light;--ink:#243348;--muted:#607086;--line:#dce4ec;--accent:#146d72;--paper:#fff;--bg:#f3f6f8}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:17px;line-height:1.95;overflow-wrap:anywhere}
+header{max-width:1240px;margin:40px auto 24px;padding:0 30px}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:.14em;font-weight:750}.intro{color:var(--muted);font-size:15px;margin:8px 0}.layout{max-width:1240px;margin:auto;display:grid;grid-template-columns:245px minmax(0,1fr);gap:32px;padding:0 30px 70px}
+aside{align-self:start;position:sticky;top:24px;max-height:calc(100vh - 48px);overflow:auto;padding:18px 16px;background:#eaf0f3;border-radius:12px;font-size:13px;line-height:1.7}summary{font-weight:700;font-size:15px;cursor:pointer}aside ul{list-style:none;margin:12px 0 0;padding:0}aside li{margin:0 0 9px}aside a{text-decoration:none;color:#4d6075}aside a:hover{color:var(--accent)}
+main{min-width:0;background:var(--paper);padding:38px 42px 50px;border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 25px #22334405}h1{font-size:29px;line-height:1.5;margin:0 0 22px;letter-spacing:-.02em}h2{font-size:23px;line-height:1.55;margin:50px 0 22px;padding:15px 0 0;border-top:2px solid var(--line);color:#123f46}h3{font-size:19px;line-height:1.6;margin:30px 0 14px}p{margin:0 0 19px}ul,ol{padding-left:1.5em;margin:0 0 22px}li{margin:7px 0}a{color:var(--accent);text-underline-offset:3px}strong{color:#172b43;font-weight:700}
+blockquote{margin:24px 0;padding:16px 22px;border-left:4px solid #5aa6a3;background:#edf7f6;border-radius:0 8px 8px 0}blockquote p:last-child{margin-bottom:0}code{font-family:ui-monospace,SFMono-Regular,Consolas,"PingFang SC",monospace;font-size:.88em;background:#edf1f4;padding:2px 5px;border-radius:4px}pre{padding:21px;background:#152536;color:#e2edf7;line-height:1.75;border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:4;overflow-x:auto;margin:24px 0}pre code{padding:0;background:none;color:inherit;font-size:13px;border-radius:0}
+.table-wrap{overflow-x:auto;margin:24px 0}table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.8;table-layout:auto}th{background:#eaf2f3;color:#214b51;text-align:left}th,td{padding:11px 13px;border:1px solid var(--line);vertical-align:top}tr:nth-child(even) td{background:#f8fafb}footer{font-size:13px;color:var(--muted);margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+@media(max-width:1000px){.layout{grid-template-columns:1fr;gap:20px;max-width:880px}aside{position:static;max-height:300px}header{max-width:880px}main{padding:28px}h1{font-size:26px}}
+@media(max-width:560px){body{font-size:16px}.layout{padding:0 12px 35px}header{padding:0 18px;margin-top:25px}main{padding:22px 18px;border-radius:10px}h1{font-size:24px}h2{font-size:21px}pre{padding:14px}pre code{font-size:12px}th,td{padding:9px;min-width:90px}}
+@media print{body{background:white;color:black;font-size:11pt;line-height:1.65}header,aside{display:none}.layout{display:block;padding:0;max-width:none}main{border:0;box-shadow:none;padding:0}h1{font-size:22pt}h2{font-size:17pt;break-after:avoid}h3{font-size:13pt;break-after:avoid}pre{background:#f0f3f5;color:black;border:1px solid #ccc;white-space:pre-wrap;break-inside:auto}pre code{font-size:9pt}table{font-size:9pt}tr{break-inside:avoid}a{color:inherit}p{orphans:3;widows:3}.table-wrap{overflow:visible}}
+</style></head>
+<body><header><div class="eyebrow">ROSETTA / OFFLINE LEARNING NOTES</div><p class="intro">2026-10-18 · 21 节讲义 · 10 道复盘题 · 全文与答案可离线阅读</p></header>
+<div class="layout"><aside aria-label="章节目录"><details open><summary>阅读目录</summary><div class="toc">
+<ul>
+<li><a href="#rosetta-学习讲义身份配置与会话边界">ROSETTA 学习讲义：身份、配置与会话边界</a><ul>
+<li><a href="#1-这一课要解决什么">1. 这一课要解决什么</a></li>
+<li><a href="#2-从一件日常任务进入系统">2. 从一件日常任务进入系统</a></li>
+<li><a href="#3-先把身份说清楚">3. 先把“身份”说清楚</a></li>
+<li><a href="#4-配置状态凭证三类信息">4. 配置、状态、凭证：三类信息</a></li>
+<li><a href="#5-数据目录与工作目录">5. 数据目录与工作目录</a></li>
+<li><a href="#6-工作目录与权限范围是两个问题">6. 工作目录与权限范围是两个问题</a></li>
+<li><a href="#7-配置应该分成哪些对象">7. 配置应该分成哪些对象</a></li>
+<li><a href="#8-一组具体的配置草案">8. 一组具体的配置草案</a></li>
+<li><a href="#9-覆盖配置究竟意味着什么">9. “覆盖配置”究竟意味着什么</a></li>
+<li><a href="#10-创建-session复制什么引用什么">10. 创建 Session：复制什么，引用什么</a></li>
+<li><a href="#11-用-go-表达这些概念">11. 用 Go 表达这些概念</a></li>
+<li><a href="#12-initagent-createsession-create-分别做什么">12. init、agent create、session create 分别做什么</a></li>
+<li><a href="#13-保存配置为什么也需要设计">13. 保存配置为什么也需要设计</a></li>
+<li><a href="#14-修改配置后到底影响谁">14. 修改配置后，到底影响谁</a></li>
+<li><a href="#15-凭证为什么单独处理">15. 凭证为什么单独处理</a></li>
+<li><a href="#16-完整推演上午创建下午修改晚上继续">16. 完整推演：上午创建，下午修改，晚上继续</a></li>
+<li><a href="#17-本课建议形成的设计决定">17. 本课建议形成的设计决定</a></li>
+<li><a href="#18-以后实现这一课时怎样判断做对了">18. 以后实现这一课时，怎样判断做对了</a></li>
+<li><a href="#19-离线练习与参考答案">19. 离线练习与参考答案</a></li>
+<li><a href="#20-随手查阅的术语表">20. 随手查阅的术语表</a></li>
+<li><a href="#21-读完以后下一步是什么">21. 读完以后，下一步是什么</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details></aside><main><h1 id="rosetta-学习讲义身份配置与会话边界">ROSETTA 学习讲义：身份、配置与会话边界</h1>
+<p>日期：2026-10-18。主题：通用个人助手的第一步设计。建议分两到三次阅读，阅读速度和是否做练习会影响用时。</p>
+<p><strong>阅读状态说明：这是一份设计讲义，不是已经发布的功能说明。</strong> 目前仓库已有的代码是早先编写的模拟通信骨架。本文提出的 Agent 配置、目录布局、会话快照、权限规则及示例命令尚未实现；本轮只编写学习材料，不继续修改应用代码。</p>
+<p>本文本身包含理解本课所需的内容。文末的官方资料只是补充出处，断网不会影响正文阅读。HTML 版本包含同样正文、目录和内嵌样式，不需要联网加载图片、字体或脚本。</p>
+<h2 id="1-这一课要解决什么">1. 这一课要解决什么</h2>
+<p>你现在的目标是一个通用个人助手。它将来可能整理资料、查询信息、管理待办、生成文件、调用外部服务，或者协助编程。我们先明确它的身份和运行边界，再逐步增加能力。</p>
+<p>这一课结束时，你应该能回答六个问题：</p>
+<ol>
+<li>Agent、Session、Turn、Daemon 各自是什么，为什么不能混用？</li>
+<li>配置、状态和凭证分别放在哪里？</li>
+<li><code>state_dir</code> 和 <code>workspace</code> 各自意味着什么？</li>
+<li>全局默认值与某个 Agent 的配置如何合并？</li>
+<li>创建 Session 时，哪些值复制下来，哪些依然需要查询当前系统？</li>
+<li>修改配置之后，正在运行的服务和已有会话会发生什么？</li>
+</ol>
+<p>建议阅读路线：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>你的阅读方式</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>想先建立整体认识</td>
+<td>读第 2–6 节，再读第 10 节与第 17 节</td>
+</tr>
+<tr>
+<td>想理解将来怎么实现</td>
+<td>接着读第 7–13 节，最后看第 18 节的验收场景</td>
+</tr>
+<tr>
+<td>想在飞机上完整复习</td>
+<td>按顺序阅读，做第 19 节练习，再核对答案</td>
+</tr>
+</tbody>
+</table></div>
+<p>本课先给出推荐方案，重要取舍会解释理由。协议、数据库和模型 SDK 的最终实现细节留给对应课程；你不必在这一课同时理解所有系统。</p>
+<h2 id="2-从一件日常任务进入系统">2. 从一件日常任务进入系统</h2>
+<p>假设你对助手说：</p>
+<blockquote>
+<p>读取下载目录里的会议记录，整理成待办清单，把结果保存到我的助手工作目录里。</p>
+</blockquote>
+<p>这句话至少引出了以下事实：</p>
+<ul>
+<li>谁来执行：你的个人助手 <code>personal</code>。</li>
+<li>属于哪段对话：例如“十月会议资料”这个 Session。</li>
+<li>从哪里读取：下载目录，这是一个输入位置。</li>
+<li>往哪里保存：助手工作目录，这是一个产物位置。</li>
+<li>是否允许读取、写入：由程序的权限规则判断。</li>
+<li>用哪个模型理解材料：由会话的模型设置决定。</li>
+<li>执行中出错后怎样判断：依靠 Turn 和工具执行记录。</li>
+</ul>
+<p>模型能够从话语中推测这些信息，但程序仍需要确定的字段。我们不能让数据库路径、权限范围或执行状态只存在于一段自然语言里。</p>
+<p>一次请求经过的主链是：</p>
+<pre><code class="language-text">用户消息
+  → 入口（CLI / Web / IM）
+  → Daemon 找到 Agent 和 Session
+  → 为本次 Turn 准备执行配置
+  → Runtime 组装上下文
+  → Provider 请求模型
+  → 模型提出工具调用
+  → 工具执行前检查参数与权限
+  → 工具返回结果，模型继续处理
+  → 保存结果，结束 Turn
+</code></pre>
+<p>今天要设计的是这条链最前面的基础：Daemon 怎么知道自己是谁，怎么找到数据，怎么确定这次执行的设置。</p>
+<h2 id="3-先把身份说清楚">3. 先把“身份”说清楚</h2>
+<h3 id="31-agent-是有配置和边界的助手">3.1 Agent 是有配置和边界的助手</h3>
+<p>在 ROSETTA 的设计里，一个 Agent 是一个有稳定身份的助手定义。它有默认模型、行为说明、默认工作区和可启用工具等设置。</p>
+<p>第一版先使用一个默认 Agent：</p>
+<pre><code class="language-text">agent_id: personal
+display_name: 我的个人助手
+</code></pre>
+<p><code>agent_id</code> 是程序识别它的标识；<code>display_name</code> 是界面上展示给你看的名字。建议 ID 创建后保持不变，显示名称可以随时修改。</p>
+<p>原因很具体：数据库记录、目录、定时任务和运行连接都会引用 ID。如果改一个显示名称就要迁移这些引用，改名会变成复杂操作。</p>
+<p>建议第一版 ID 规则为 <code>[a-z][a-z0-9_-]{0,47}</code>，即以小写字母开头，后续只含小写字母、数字、下划线或短横线，最多 48 字符。这是本项目的规则，不是行业统一标准。限制字符可以减少路径和命令行中的歧义；它不能代替所有路径安全检查。</p>
+<h3 id="32-session-是对话不是另一个-agent">3.2 Session 是对话，不是另一个 Agent</h3>
+<p>同一个个人助手可以同时拥有多段对话：</p>
+<pre><code class="language-text">Agent personal
+├── Session s_meeting：十月会议资料
+├── Session s_travel：周末出行计划
+└── Session s_reading：读书笔记
+</code></pre>
+<p>Session 有自己的消息历史和设置。这让会议资料不会自然混入出行计划的上下文。将来记忆系统可以有规则地共享已确认偏好，例如“用户喜欢表格形式的待办”。</p>
+<p>需要区分“对话历史分开”和“数据一定物理隔离”。同一个 Agent 的多个 Session 可以存入同一数据库，通过 session_id 区分。隔离规则仍然要由查询和权限检查落实。</p>
+<h3 id="33-turn-是一次执行round-是一次模型调用">3.3 Turn 是一次执行，Round 是一次模型调用</h3>
+<pre><code class="language-text">一个 Session
+└── Turn 1：整理会议材料
+    ├── Round 1：模型要求列出文件
+    ├── 工具：列目录
+    ├── Round 2：模型要求读取相关文件
+    ├── 工具：读取文件
+    ├── Round 3：模型要求保存清单
+    ├── 工具：写入文件
+    └── Round 4：模型报告结果，Turn 结束
+</code></pre>
+<p>一次用户输入可以引出多次模型请求。限制 <code>max_rounds</code> 是限制一次 Turn 能调用模型多少轮，不是限制整个 Session 能说多少句话。</p>
+<p>Goal 则是可能跨多个 Turn 的长期目标，例如“持续整理这个月的会议资料”。我们先理解它，后续再设计自动续跑。把一个目标写入配置或聊天记录，不会自动产生可靠的后台执行能力。</p>
+<h3 id="34-daemon-是进程不是助手的永久身份">3.4 Daemon 是进程，不是助手的永久身份</h3>
+<p>Agent 的配置和历史存在磁盘上，Daemon 是当前承载它的服务进程。服务退出后，Agent 定义仍然存在；重启后它有新的 PID，但仍然可以是同一个 <code>personal</code>。</p>
+<pre><code class="language-text">稳定身份：agent_id = personal
+    第一次运行：PID 4100，实例 A
+    第二次运行：PID 6200，实例 B
+</code></pre>
+<p>不能拿 PID 当 Agent ID，也不能仅凭 PID 判断某个进程就是上次的服务。原文中的 generation 和 instance_token 是在解决运行实例身份问题；生命周期课程会继续解释。</p>
+<p>本项目建议保留“一份 Agent 身份与配置对应一个 Daemon”的部署边界，第一版只提供默认 Agent。子 Agent 是执行期间委派出去的任务，可以共享 Runtime 并使用独立 Session，不要求每个子任务都启动一个 Daemon。</p>
+<h2 id="4-配置状态凭证三类信息">4. 配置、状态、凭证：三类信息</h2>
+<p>这三类信息经常都被叫作“配置”，但它们的变化方式不同。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>回答的问题</th>
+<th>示例</th>
+<th>通常由谁修改</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>配置 Configuration</td>
+<td>希望系统怎样工作？</td>
+<td>默认模型、默认工作目录、默认轮数上限</td>
+<td>用户或配置管理命令</td>
+</tr>
+<tr>
+<td>状态 State</td>
+<td>已经发生了什么、现在进展如何？</td>
+<td>消息历史、运行中的 Turn、已创建的提醒</td>
+<td>程序执行过程</td>
+</tr>
+<tr>
+<td>凭证 Credential</td>
+<td>如何访问某个外部服务？</td>
+<td>模型 API Key、服务访问令牌</td>
+<td>用户或凭证管理系统</td>
+</tr>
+</tbody>
+</table></div>
+<p>例如：</p>
+<ul>
+<li>“新会话默认最多运行 12 轮”是配置。</li>
+<li>“这个 Turn 已经运行了 7 轮”是状态。</li>
+<li>“调用模型使用哪个 API Key”涉及凭证。</li>
+</ul>
+<p>如果把当前使用轮数写回全局配置，就会出现不同任务互相覆盖的问题；如果把密钥复制进每条会话快照，备份和日志里的泄露面会明显扩大。</p>
+<p>还有一个术语上的小陷阱：<code>state_dir</code> 的名字虽然含有 state，但它是整个应用私有数据的根目录，里面可以同时放配置、持久状态和运行时文件。它的目录名并不表示其中每个文件都是业务状态。</p>
+<h2 id="5-数据目录与工作目录">5. 数据目录与工作目录</h2>
+<h3 id="51-state_dir助手维护自己的地方">5.1 state_dir：助手维护自己的地方</h3>
+<p>建议默认根目录为 <code>~/.rosetta</code>。用户以后可以通过显式启动参数选择另一个目录，用来隔离测试环境或另一套个人数据。</p>
+<p>设计目标目录如下。它与早先骨架的单一 daemon.sock 布局不同，尚未迁移实现。</p>
+<pre><code class="language-text">~/.rosetta/                         ← state_dir
+├── config.json                    ← 全局配置与 Provider 注册
+├── agents/
+│   └── personal/
+│       ├── agent.json             ← Agent 显示信息与覆盖项
+│       └── skills/                ← 将来启用的技能资源
+├── data/
+│   └── personal/
+│       └── state.db               ← 将来保存会话、消息、任务等
+├── runtime/
+│   └── personal/
+│       ├── agent.sock             ← 本机通信端点
+│       ├── daemon.lock            ← 进程互斥锁使用的文件
+│       └── lifecycle.json         ← 将来记录运行实例信息
+└── logs/
+    └── personal/
+        └── daemon.log             ← 将来的诊断日志
+</code></pre>
+<p>配置文件适合人阅读、修改；大量消息、关联状态和事务操作交给数据库。SQLite 的具体表结构留到存储课程。目录中的数据库、日志和技能路径是设计，不意味着这些能力已经存在。</p>
+<p>runtime 中的 socket 和 PID 等信息不能作为业务事实的唯一来源。它们可能残留，也可能需要重新生成。锁文件存在也不代表锁正在被某个进程持有。</p>
+<h3 id="52-workspace当前任务默认操作的位置">5.2 workspace：当前任务默认操作的位置</h3>
+<p>例如：</p>
+<pre><code class="language-text">~/ROSETTA-Workspace/               ← workspace
+├── meeting-notes/
+├── summaries/
+└── drafts/
+</code></pre>
+<p>用户要求“把清单存到 summaries/todo.md”，工具需要一个确定的起点：</p>
+<pre><code class="language-text">workspace = /Users/aoki/ROSETTA-Workspace
+相对路径 = summaries/todo.md
+候选目标 = /Users/aoki/ROSETTA-Workspace/summaries/todo.md
+</code></pre>
+<p>workspace 不要求是 Git 仓库，也不要求是代码项目。对通用助手，它可以是你专门存放资料和产物的文件夹。日历查询、网页搜索等任务甚至不一定需要访问本地文件。</p>
+<h3 id="53-为什么把两个目录分开">5.3 为什么把两个目录分开</h3>
+<p>你的助手会整理、创建甚至删除用户文件；它自己的会话数据库、配置和凭证引用应有独立的管理边界。分开之后：</p>
+<ul>
+<li>任务产物放在容易查看和整理的位置。</li>
+<li>应用数据可以按不同策略备份。</li>
+<li>更换任务目录不会移动会话数据库。</li>
+<li>工具的文件权限更容易描述。</li>
+</ul>
+<p>项目第一版建议禁止 workspace 与 state_dir 形成祖先或后代关系。例如把 workspace 设成整个用户主目录，会覆盖 <code>~/.rosetta</code>，因此拒绝这种设置，提示选择专用目录。今后需要读取其他目录时，通过明确的读取授权扩展。</p>
+<p>这是简化边界的产品决策，不代表“目录分开之后就拥有操作系统沙箱”。硬链接、符号链接和命令执行还有独立问题，下一节继续解释。</p>
+<h3 id="54-如何定位-state_dir">5.4 如何定位 state_dir</h3>
+<p>建议优先级：</p>
+<pre><code class="language-text">显式 --state-dir
+    &gt; ROSETTA_STATE_DIR 环境变量
+    &gt; 默认 ~/.rosetta
+</code></pre>
+<p>不能先从 <code>state_dir/config.json</code> 读取 state_dir，再去找到这个文件，这会形成循环依赖。数据根目录必须先通过启动入口确定。</p>
+<p>CLI 和 Daemon 都需要使用同一套定位规则；CLI 启动子进程时传入已经确定的绝对路径，避免双方各猜一遍。</p>
+<p>首版不设计任意环境变量覆盖任意配置字段，只允许文档明确列出的变量。这样以后排查“为什么实际值不是 JSON 里的值”时，来源比较清晰。</p>
+<h2 id="6-工作目录与权限范围是两个问题">6. 工作目录与权限范围是两个问题</h2>
+<p>workspace 回答“相对路径从哪里开始解释”。权限范围回答“这个操作是否被允许”。两者有关联，但不能混为一个字段。</p>
+<p>假设：</p>
+<pre><code class="language-text">workspace:   ~/ROSETTA-Workspace
+read_roots:  ~/ROSETTA-Workspace, ~/Downloads
+write_roots: ~/ROSETTA-Workspace
+</code></pre>
+<p>结果是：助手可以读取下载目录的资料，但不能把文件写回下载目录。你可以要求它读取指定的绝对路径，然后把整理结果写进工作目录。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>操作</th>
+<th>候选路径</th>
+<th>这组规则下的结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>读取 summaries/a.md</td>
+<td>workspace 下的文件</td>
+<td>路径层面允许，还需检查工具是否启用</td>
+</tr>
+<tr>
+<td>读取 ~/Downloads/meeting.txt</td>
+<td>下载目录</td>
+<td>路径层面允许</td>
+</tr>
+<tr>
+<td>写入 ~/Downloads/result.md</td>
+<td>下载目录</td>
+<td>拒绝，下载目录不在写入范围</td>
+</tr>
+<tr>
+<td>写入 summaries/result.md</td>
+<td>工作目录</td>
+<td>路径层面允许，可能还需审批</td>
+</tr>
+<tr>
+<td>读取 ~/.rosetta/config.json</td>
+<td>应用内部目录</td>
+<td>通用文件工具拒绝；需要专用、脱敏的管理接口</td>
+</tr>
+</tbody>
+</table></div>
+<p>“目录允许”只是一道检查。真正执行仍需要工具存在、会话启用、当前策略允许、参数合法，以及必要的用户审批。</p>
+<h3 id="61-权限上限与请求能力">6.1 权限上限与请求能力</h3>
+<p>我们把三件事分别描述：</p>
+<ol>
+<li>全局策略允许系统提供哪些能力。</li>
+<li>Agent 默认希望启用哪些能力。</li>
+<li>某个 Session 实际请求启用哪些能力。</li>
+</ol>
+<p>执行时可用工具是这些集合再与当前可用工具实现相交的结果：</p>
+<pre><code class="language-text">可用工具 = 当前策略允许 ∩ Agent 当前允许 ∩ Session 请求 ∩ 已安装可用
+</code></pre>
+<p>具体哪些集合要在创建时校验、哪些在执行前再检查，会在权限实现中落实。关键是会话记录不能自己把权限提高到策略之外。</p>
+<p>用户点“同意写入这份清单”解决的是这次允许范围内操作的审批，不会自动修改 write_roots。需要访问新目录时，应通过明确的授权设置修改规则；不能让一次模糊的确认无限扩大范围。</p>
+<h3 id="62-为什么拼接字符串还不够">6.2 为什么拼接字符串还不够</h3>
+<p>路径中可能有 <code>..</code>，某个目录也可能是指向外部的符号链接。检查后到真正打开文件前，目标还可能被替换。因此“拼出路径，再做字符串前缀检查”不足以实现可靠边界。</p>
+<p>Go 的官方文章介绍了目录根句柄和抵抗路径穿越的文件 API，也说明了相关限制。我们在文件工具阶段会依据平台能力采用合适的打开方式；本课先确定规则，不声称已经实现隔离。<a href="https://go.dev/blog/osroot">官方说明：Traversal-resistant file APIs</a></p>
+<p>另外，目录约束并不能控制任意 shell 子进程的所有行为。如果未来开放 exec，需要额外设计进程隔离和网络等规则。硬链接等别名问题也要单独评估。</p>
+<h3 id="63-多会话时不要反复改变整个进程的工作目录">6.3 多会话时不要反复改变整个进程的工作目录</h3>
+<p>如果 Session A 在工作区 A，Session B 在工作区 B，不能为了执行 B 而把整个 Daemon 的 cwd 切到 B。A 同时执行时可能看到错误的工作目录。</p>
+<p>建议工具接收显式 workspace；文件操作从明确根开始；子进程通过自身的工作目录参数设置 cwd。Go 的 <code>exec.Cmd.Dir</code> 提供了子进程工作目录设置入口。<a href="https://pkg.go.dev/os/exec#Cmd">Go os/exec 文档</a></p>
+<h2 id="7-配置应该分成哪些对象">7. 配置应该分成哪些对象</h2>
+<p>不要把所有字段都放进一个 AgentConfig。建议分成以下对象，每种对象只保留自己的事实。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>对象</th>
+<th>负责保存什么</th>
+<th>不应该保存什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GlobalConfig</td>
+<td>Provider 注册、Agent 默认值、全局权限上限</td>
+<td>所有会话的消息和执行进度</td>
+</tr>
+<tr>
+<td>AgentConfig</td>
+<td>显示名称、该 Agent 的覆盖项</td>
+<td>PID、正在运行的 goroutine</td>
+</tr>
+<tr>
+<td>EffectiveAgentConfig</td>
+<td>合并与校验后的完整有效值</td>
+<td>可随意缺省、无法解释来源的字段</td>
+</tr>
+<tr>
+<td>SessionSettings</td>
+<td>创建时确定的会话设置和用户后续显式调整</td>
+<td>密钥明文、socket 句柄</td>
+</tr>
+<tr>
+<td>TurnExecutionConfig</td>
+<td>本次执行固定的模型、工作区、预算等</td>
+<td>被其他请求随时改写的共享 map</td>
+</tr>
+<tr>
+<td>RuntimeDependencies</td>
+<td>Provider 客户端、工具注册表、存储句柄</td>
+<td>作为 JSON 持久化的连接对象</td>
+</tr>
+</tbody>
+</table></div>
+<p>配置描述“需要创建和使用什么”，运行时依赖是据此实际创建的对象。一个 HTTP 客户端可以持有连接池，它不能直接当作普通配置复制到 Session 的 JSON 中。</p>
+<h2 id="8-一组具体的配置草案">8. 一组具体的配置草案</h2>
+<p>下面是本课建议的字段草案，用来推演规则。工具名、模型名、版本号和命令形式都不构成当前程序已支持的承诺。</p>
+<h3 id="81-全局配置示例">8.1 全局配置示例</h3>
+<p>这个示例使用模拟 Provider，使配置概念不依赖外部账号。将来接入真实模型时，再补充已验证的 Provider 配置。</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: 1,
+  &quot;default_agent&quot;: &quot;personal&quot;,
+  &quot;providers&quot;: {
+    &quot;offline&quot;: {
+      &quot;api_type&quot;: &quot;mock&quot;
+    }
+  },
+  &quot;agent_defaults&quot;: {
+    &quot;model&quot;: {
+      &quot;provider&quot;: &quot;offline&quot;,
+      &quot;name&quot;: &quot;mock-v1&quot;
+    },
+    &quot;workspace&quot;: &quot;~/ROSETTA-Workspace&quot;,
+    &quot;timezone&quot;: &quot;Asia/Shanghai&quot;,
+    &quot;instructions&quot;: &quot;使用中文清楚回答；涉及文件变更时先说明具体内容。&quot;,
+    &quot;enabled_tools&quot;: [&quot;file.list&quot;, &quot;file.read&quot;, &quot;file.write&quot;],
+    &quot;limits&quot;: {
+      &quot;max_rounds&quot;: 12,
+      &quot;turn_timeout_seconds&quot;: 180,
+      &quot;max_output_tokens&quot;: 4096
+    }
+  },
+  &quot;policy&quot;: {
+    &quot;allowed_tools&quot;: [&quot;file.list&quot;, &quot;file.read&quot;, &quot;file.write&quot;],
+    &quot;read_roots&quot;: [&quot;~/ROSETTA-Workspace&quot;, &quot;~/Downloads&quot;],
+    &quot;write_roots&quot;: [&quot;~/ROSETTA-Workspace&quot;],
+    &quot;approval_required&quot;: [&quot;file.write&quot;],
+    &quot;limits&quot;: {
+      &quot;max_rounds&quot;: 30,
+      &quot;turn_timeout_seconds&quot;: 600,
+      &quot;max_output_tokens&quot;: 16384
+    }
+  }
+}
+</code></pre>
+<p>这些数值是方便推演的初始建议，后续按使用体验调整。max_output_tokens 在这里表示每次模型调用的输出上限，不是整个 Turn 的总费用上限。输入 Token、多个 Round、后台调用都会影响用量；预算课程会单独处理。</p>
+<p>注意 agent_defaults 和 policy 的区别：前者提供默认设置，后者提供不可由普通 Agent 覆盖提高的上限。默认 12 轮、策略最多 30 轮，允许你为某个任务显式选择 20 轮；请求 100 轮则应被拒绝。</p>
+<p>instructions 影响模型的行为倾向。真正的“写文件前必须审批”来自 policy 和执行检查，不能只依赖提示词里的一句话。</p>
+<h3 id="82-agent-配置示例">8.2 Agent 配置示例</h3>
+<p>文件位置为设计中的 <code>agents/personal/agent.json</code>：</p>
+<pre><code class="language-json">{
+  &quot;schema_version&quot;: 1,
+  &quot;display_name&quot;: &quot;我的个人助手&quot;,
+  &quot;overrides&quot;: {
+    &quot;instructions&quot;: &quot;使用中文回答。整理资料时标注来源文件，优先输出可核对的清单。&quot;,
+    &quot;limits&quot;: {
+      &quot;max_rounds&quot;: 8
+    }
+  }
+}
+</code></pre>
+<p>这里没有重复保存 agent_id，因为它来自受校验的 Agent 目录身份。创建和加载时必须验证目录 ID；以后数据库中的 Agent 关联仍然明确保存这个 ID。这样避免路径写 personal、文件内容却写另一个 ID 的双重事实。</p>
+<p>display_name 不参与模型选择，也不是稳定引用。overrides 中没有写的字段继承默认值。</p>
+<h3 id="83-最终得到什么">8.3 最终得到什么</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>有效值</th>
+<th>来源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>model</td>
+<td>offline / mock-v1</td>
+<td>全局默认</td>
+</tr>
+<tr>
+<td>workspace</td>
+<td>~/ROSETTA-Workspace 解析后的绝对目录</td>
+<td>全局默认</td>
+</tr>
+<tr>
+<td>timezone</td>
+<td>Asia/Shanghai</td>
+<td>全局默认</td>
+</tr>
+<tr>
+<td>instructions</td>
+<td>标注来源、输出清单的那段说明</td>
+<td>Agent 覆盖</td>
+</tr>
+<tr>
+<td>enabled_tools</td>
+<td>list/read/write</td>
+<td>全局默认，随后受 policy 约束</td>
+</tr>
+<tr>
+<td>max_rounds</td>
+<td>8</td>
+<td>Agent 覆盖，且未超过策略 30</td>
+</tr>
+<tr>
+<td>turn_timeout_seconds</td>
+<td>180</td>
+<td>全局默认，且未超过策略 600</td>
+</tr>
+<tr>
+<td>max_output_tokens</td>
+<td>4096</td>
+<td>全局默认，且未超过策略 16384</td>
+</tr>
+</tbody>
+</table></div>
+<p>设计一个 <code>config explain</code> 能力很有价值：同时展示最终值与来源。它能回答“为什么现在只有 8 轮”，而不是只打印一大段 JSON。该命令尚未实现。</p>
+<h2 id="9-覆盖配置究竟意味着什么">9. “覆盖配置”究竟意味着什么</h2>
+<p>“Agent 覆盖全局配置”只说明优先级，还不足以写出一致的程序。我们需要为不同字段规定合并语义。</p>
+<h3 id="91-总体顺序">9.1 总体顺序</h3>
+<pre><code class="language-text">内置默认值
+  → 合入全局 agent_defaults
+  → 合入 Agent overrides
+  → 校验有效配置与 policy
+  → 得到 EffectiveAgentConfig
+</code></pre>
+<p>内置默认值只用于文档明确允许省略的非敏感字段，例如默认轮数。模型路由、路径授权等不能因为拼错或丢失而悄悄换成一个更宽松的值。</p>
+<h3 id="92-每种字段有自己的规则">9.2 每种字段有自己的规则</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段类型</th>
+<th>我建议的规则</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>字符串、数字、布尔值</td>
+<td>明确出现才覆盖</td>
+<td>false、0 与没填写不能混淆</td>
+</tr>
+<tr>
+<td>limits 等分组对象</td>
+<td>按已知字段逐项覆盖</td>
+<td>只改轮数时不丢失超时设置</td>
+</tr>
+<tr>
+<td>model 路由对象</td>
+<td>整个替换，要求 provider/name 成对出现</td>
+<td>避免新 Provider 搭配旧模型名</td>
+</tr>
+<tr>
+<td>enabled_tools 数组</td>
+<td>整个替换，不自动追加</td>
+<td>方便表达更小的工具集合</td>
+</tr>
+<tr>
+<td>instructions</td>
+<td>整段替换</td>
+<td>避免多份互相矛盾的行为说明自动累加</td>
+</tr>
+<tr>
+<td>policy</td>
+<td>作为独立策略校验，不允许 Agent 随意覆盖提高</td>
+<td>默认值合并和授权是不同操作</td>
+</tr>
+</tbody>
+</table></div>
+<p>这里的“按字段合并”是我们自己定义的规则，不默认等于某个 JSON Patch 标准。</p>
+<h3 id="93-缺失空数组空字符串null">9.3 缺失、空数组、空字符串、null</h3>
+<p>这几种输入应有不同意义：</p>
+<pre><code class="language-json">{}
+</code></pre>
+<p>表示未设置覆盖项，继续继承。</p>
+<pre><code class="language-json">{&quot;enabled_tools&quot;: []}
+</code></pre>
+<p>表示明确不请求启用任何工具，不应该被处理为“没有设置”。</p>
+<pre><code class="language-json">{&quot;instructions&quot;: &quot;&quot;}
+</code></pre>
+<p>本课建议表示清空可选的 Agent 附加说明；系统基础协议和权限仍由程序保留。相反，空 workspace、空模型标识应该报错，因为它们无法构成有效执行设置。</p>
+<pre><code class="language-json">{&quot;workspace&quot;: null}
+</code></pre>
+<p>本课建议拒绝 null，避免它同时表示继承、清空或删除等多种含义。想恢复继承，就从 overrides 删除这个字段；想禁用工具，用空数组。</p>
+<p>限额字段的 0 也不表示无限制：本课规定这三个限额必须为正数。无限制能力如果将来确有必要，应该设计显式选项，不能藏在一个容易误填的零值里。</p>
+<h3 id="94-一个合并练习">9.4 一个合并练习</h3>
+<p>默认：</p>
+<pre><code class="language-json">{
+  &quot;enabled_tools&quot;: [&quot;file.list&quot;, &quot;file.read&quot;, &quot;file.write&quot;],
+  &quot;limits&quot;: {&quot;max_rounds&quot;: 12, &quot;turn_timeout_seconds&quot;: 180}
+}
+</code></pre>
+<p>覆盖：</p>
+<pre><code class="language-json">{
+  &quot;enabled_tools&quot;: [&quot;file.read&quot;],
+  &quot;limits&quot;: {&quot;max_rounds&quot;: 5}
+}
+</code></pre>
+<p>结果应该是：仅启用 file.read，最多 5 轮，仍然超时 180 秒。如果你把数组自动追加，就会意外保留写入能力；如果直接替换整个 limits，就会丢失超时设置。</p>
+<p>这就是为什么通用的“递归合并任意 map”往往不够。某些字段需要整体替换，某些字段需要逐项覆盖，权限字段则根本不应走普通默认值合并。</p>
+<h2 id="10-创建-session复制什么引用什么">10. 创建 Session：复制什么，引用什么</h2>
+<p>这是本课最重要的一节。</p>
+<h3 id="101-如果每次执行都重新读取默认值">10.1 如果每次执行都重新读取默认值</h3>
+<p>你上午创建了“会议资料”会话，使用模型 A、工作区 A。中午把助手的默认模型改为 B、默认工作区改为 B，准备处理新任务。</p>
+<p>下午回到旧会话，说“把刚才的清单再更新一下”。如果旧会话每次都读取最新默认值，它可能开始使用模型 B，并把相对路径解释到工作区 B。</p>
+<p>从程序角度，每个字段都有值；从用户角度，同一段对话的行为却悄悄变了。</p>
+<h3 id="102-因此创建时保存会话设置快照">10.2 因此创建时保存会话设置快照</h3>
+<p>建议 Session 创建时，把一部分已经解析好的值复制下来，保存成 SessionSettings。这个过程类似填表：模板提供默认答案，创建记录后，记录有自己的实际值。</p>
+<pre><code class="language-text">创建时：EffectiveAgentConfig → 复制指定字段 → SessionSettings
+以后：  SessionSettings → 本次 Turn 的设置
+</code></pre>
+<p>快照不是复制整个 Runtime，也不是复制所有配置文件。它是明确选定的一组值。</p>
+<p>示意记录如下。它用于解释数据模型，不是承诺未来数据库会以这一段 JSON 原样存储。</p>
+<pre><code class="language-json">{
+  &quot;session_id&quot;: &quot;s_meeting&quot;,
+  &quot;agent_id&quot;: &quot;personal&quot;,
+  &quot;title&quot;: &quot;十月会议资料&quot;,
+  &quot;settings&quot;: {
+    &quot;model&quot;: {&quot;provider&quot;: &quot;offline&quot;, &quot;name&quot;: &quot;mock-v1&quot;},
+    &quot;workspace&quot;: &quot;/Users/aoki/ROSETTA-Workspace&quot;,
+    &quot;timezone&quot;: &quot;Asia/Shanghai&quot;,
+    &quot;instructions&quot;: &quot;使用中文回答。整理资料时标注来源文件，优先输出可核对的清单。&quot;,
+    &quot;requested_tools&quot;: [&quot;file.list&quot;, &quot;file.read&quot;, &quot;file.write&quot;],
+    &quot;limits&quot;: {
+      &quot;max_rounds&quot;: 8,
+      &quot;turn_timeout_seconds&quot;: 180,
+      &quot;max_output_tokens&quot;: 4096
+    }
+  }
+}
+</code></pre>
+<p>注意保存的是解析后的绝对 workspace，而不是依赖当时终端位置的相对字符串。用户主目录扩展也应在已定义的配置加载阶段完成。</p>
+<h3 id="103-哪些复制哪些引用">10.3 哪些复制，哪些引用</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>建议处理</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent ID</td>
+<td>保存稳定引用</td>
+<td>表明会话归属</td>
+</tr>
+<tr>
+<td>默认模型选择</td>
+<td>复制 provider ID 与 model name</td>
+<td>改默认值不悄悄切换旧会话</td>
+</tr>
+<tr>
+<td>workspace</td>
+<td>复制已规范化的绝对目录</td>
+<td>相对路径解释保持稳定</td>
+</tr>
+<tr>
+<td>timezone</td>
+<td>复制</td>
+<td>“明天上午”等表达有稳定的解释背景</td>
+</tr>
+<tr>
+<td>Agent 附加 instructions</td>
+<td>复制</td>
+<td>旧任务不悄悄换角色说明</td>
+</tr>
+<tr>
+<td>启用工具的请求集合</td>
+<td>复制到 requested_tools</td>
+<td>保留这段会话希望使用哪些能力</td>
+</tr>
+<tr>
+<td>轮数、超时、输出设置</td>
+<td>复制请求值</td>
+<td>保留会话行为，但仍受当前硬上限约束</td>
+</tr>
+<tr>
+<td>Provider 客户端</td>
+<td>引用当前有效的运行时对象</td>
+<td>连接不能作为会话数据复制</td>
+</tr>
+<tr>
+<td>API Key</td>
+<td>通过当前凭证系统获取</td>
+<td>避免把密钥复制到历史和备份</td>
+</tr>
+<tr>
+<td>当前权限策略</td>
+<td>执行前检查当前生效策略</td>
+<td>旧快照不能保留已撤销授权</td>
+</tr>
+<tr>
+<td>已安装工具与 MCP 连接</td>
+<td>查询当前可用能力</td>
+<td>配置里写了名字不代表工具仍然存在</td>
+</tr>
+<tr>
+<td>当前时间、当前轮数</td>
+<td>执行时计算</td>
+<td>它们是运行状态</td>
+</tr>
+</tbody>
+</table></div>
+<p>timezone 快照也不是让“明天”永远指向会话创建时的明天。日期解释还需要当前时间；创建具体提醒时，保存明确的触发时间与原始时区。重复提醒则还需要时区与夏令时策略，这些属于调度课程。</p>
+<h3 id="104-快照稳定不等于授权永久有效">10.4 快照稳定，不等于授权永久有效</h3>
+<p>假设旧 Session 请求了 file.write，之后用户从当前策略中删除 file.write。旧 Session 再次执行时应失去写权限。</p>
+<p>可以把它理解成：会话记录保存“我想使用什么”，策略检查回答“现在还允许什么”。</p>
+<p>对工具集合使用交集。对可比较的限额，可以使用会话请求值与当前硬上限的较小值；降低后的实际值应可见，并写入本次执行记录。新增会话或显式修改时，如果请求值超出硬上限，直接提示错误，避免用户以为设置已按原值生效。</p>
+<p>Agent 的当前 enabled_tools 也作为能力上限参与检查。因此，工具集合的收紧会影响旧会话；普通默认模型、workspace 和 instructions 的修改则不会自动改旧会话。这是一个有意设计的例外，必须写进产品行为。</p>
+<p>工具已在执行中时，撤销授权能否立即阻止它，是另一层问题。检查发生在执行前，已经发生的文件写入不能靠修改配置自动撤销。对执行中的命令需要取消和进程清理；第一版尚不支持策略热更新，修改后需重启服务使其生效。</p>
+<h3 id="105-模型路由还需要识别名字没变目的地变了">10.5 模型路由还需要识别“名字没变，目的地变了”</h3>
+<p>Session 保存 provider ID，不代表永远信任这个 ID 背后任何新地址。如果管理员把同一个 Provider 名称的 endpoint 改到另一台服务器，旧会话历史可能被发往新位置。</p>
+<p>后续 Provider 设计建议记录不含密钥的路由身份，例如 api_type 与 endpoint 的指纹。发现路由目的地变化时，阻止旧会话静默续发，要求明确重新绑定。密钥轮换与目的地变化应分别处理。</p>
+<p>这部分不要求你现在实现；它说明为什么“只复制模型名”仍然不能覆盖所有真实场景。</p>
+<h3 id="106-每个-turn-也要固定执行设置">10.6 每个 Turn 也要固定执行设置</h3>
+<p>一个 Turn 内会有多个 Round。如果模型、workspace 或 instructions 在 Round 之间被其他请求改掉，这一次任务就可能前后不一致。</p>
+<p>因此建议每个 Turn 开始时从 Session 取得一份不可变的执行设置，用到本次结束。第一版可以直接拒绝修改正在执行的 Session 设置；等空闲时再改，新设置作用于下一次 Turn。</p>
+<p>不要把多个 goroutine 都能写的共享 map 当作这份设置。Go 中复制结构体不自动深拷贝其中的 slice 和 map；实现时要明确复制或保持它们不可变。</p>
+<p>权限仍由执行门控检查当前生效策略，而不是让旧执行设置替代权限检查。热重载课程会进一步区分稳定执行配置与可撤销授权。</p>
+<h2 id="11-用-go-表达这些概念">11. 用 Go 表达这些概念</h2>
+<p>本节只展示数据建模片段，帮助你理解未来实现。它们没有写入应用源码，也不是可以直接当作完整配置模块运行的代码。</p>
+<h3 id="111-原始覆盖配置要能表达没写">11.1 原始覆盖配置要能表达“没写”</h3>
+<p>先看一个过于简单的类型：</p>
+<pre><code class="language-go">type Limits struct {
+    MaxRounds int `json:&quot;max_rounds&quot;`
+}
+</code></pre>
+<p>如果用它直接读取覆盖项，没写 max_rounds 和显式写 0 都可能得到 Go 的整数零值。我们就无法判断用户是希望继承，还是提供了一个应被拒绝的值。</p>
+<p>覆盖层可以使用指针字段表示是否出现：</p>
+<pre><code class="language-go">type RawLimits struct {
+    MaxRounds          *int `json:&quot;max_rounds&quot;`
+    TurnTimeoutSeconds *int `json:&quot;turn_timeout_seconds&quot;`
+    MaxOutputTokens    *int `json:&quot;max_output_tokens&quot;`
+}
+
+type RawAgentOverrides struct {
+    Workspace    *string    `json:&quot;workspace&quot;`
+    Instructions *string    `json:&quot;instructions&quot;`
+    EnabledTools *[]string  `json:&quot;enabled_tools&quot;`
+    Limits       *RawLimits `json:&quot;limits&quot;`
+}
+</code></pre>
+<p><code>*int</code> 可以先理解为“可能没有提供，也可能提供了一个整数”。nil 表示未提供有效覆盖值；非 nil 时，解引用得到显式值。这里使用指针是为了表达可选性，并不是为了追求性能。</p>
+<p>布尔字段也有同样问题：没写与明确写 false 需要区分。不能用“值不是零才覆盖”的通用规则，否则就永远无法显式关闭某些默认开启的功能。</p>
+<p><strong>仅靠指针仍不足以实现本课的 null 规则。</strong> 对传统 encoding/json 的这种解码方式，缺失与 null 都可能落到 nil。我们还需要在解析阶段拒绝不允许的 null，或使用带 presence 标记的专用类型。<code>omitempty</code> 主要控制编码输出，不会自动替你解决读取时的所有缺省语义。<a href="https://pkg.go.dev/encoding/json">Go encoding/json 文档</a></p>
+<h3 id="112-有效配置应有明确的完整值">11.2 有效配置应有明确的完整值</h3>
+<p>合并、规范化、校验之后，下游不应到处继续判断“这个字段是否存在”。</p>
+<pre><code class="language-go">type EffectiveLimits struct {
+    MaxRounds          int
+    TurnTimeoutSeconds int
+    MaxOutputTokens    int
+}
+
+type EffectiveAgentConfig struct {
+    AgentID      string
+    Workspace    string
+    Instructions string
+    EnabledTools []string
+    Limits       EffectiveLimits
+}
+</code></pre>
+<p>这只是节选。实际类型还需要 model、timezone 等字段。</p>
+<p>Raw 与 Effective 分开之后，函数职责就清楚了：配置加载器处理复杂的缺省和合并；Runtime 使用已经验证的值。创建 Session 时再从 Effective 中显式选择要复制的字段。</p>
+<h3 id="113-建议的加载流水线">11.3 建议的加载流水线</h3>
+<pre><code class="language-text">ResolveStateDir
+  → ReadGlobalConfig
+  → ReadAgentConfig
+  → ParseStrictly
+  → MergeDefaultsAndOverrides
+  → NormalizePathsAndValues
+  → ValidateReferencesAndPolicy
+  → BuildEffectiveConfig
+</code></pre>
+<p>这些名字是职责草案，不要求每个名字都成为一个单独的 package 或几十行转发函数。先让模块职责清楚，再决定函数大小。</p>
+<p>严格解析至少要考虑：未知字段、重复键、非法 null、字段类型、只允许一个 JSON 对象以及文件大小。不要以为启用一个“拒绝未知字段”选项就同时解决了所有问题。传统 encoding/json 的兼容行为与我们希望的严格配置规则不完全相同；实现时应按规则选择和验证解析方式。<a href="https://pkg.go.dev/encoding/json">Go JSON 行为说明</a></p>
+<h3 id="114-分层校验更容易定位错误">11.4 分层校验更容易定位错误</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>校验层</th>
+<th>示例错误</th>
+<th>好的错误信息应说明什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>语法</td>
+<td>少了逗号</td>
+<td>哪个文件、哪个位置无法解析</td>
+</tr>
+<tr>
+<td>结构</td>
+<td>max_rounds 写成对象</td>
+<td>字段路径与期望类型</td>
+</tr>
+<tr>
+<td>字段</td>
+<td>max_rounds 为 0</td>
+<td>合法范围是什么</td>
+</tr>
+<tr>
+<td>引用</td>
+<td>model.provider 不存在</td>
+<td>哪个 Provider 引用无效</td>
+</tr>
+<tr>
+<td>组合</td>
+<td>模型路由只写 provider，没有 name</td>
+<td>哪两个字段必须配套</td>
+</tr>
+<tr>
+<td>环境</td>
+<td>workspace 不存在</td>
+<td>是路径无效，还是需要明确创建</td>
+</tr>
+<tr>
+<td>策略</td>
+<td>请求写工具，但当前策略不允许</td>
+<td>哪项能力超出上限</td>
+</tr>
+</tbody>
+</table></div>
+<p>建议第一版配置中的 workspace、read_roots、write_roots 只接受绝对路径或用户主目录形式的 <code>~/...</code>；拒绝其他相对路径。这样同一个配置从不同终端启动也不会改变含义。后续若支持相对路径，再明确它相对于哪个文件解析。</p>
+<p>路径的词法规范化与真正的文件访问检查是两层。启动时检查目录存在，并不意味着几小时后访问时无需再次验证。</p>
+<h2 id="12-initagent-createsession-create-分别做什么">12. init、agent create、session create 分别做什么</h2>
+<p>原文把这几类写入放在一起比较很有价值，因为它们影响的对象完全不同。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>操作</th>
+<th>主要建立什么</th>
+<th>是否表示开始调用模型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>init</td>
+<td>应用数据根目录、全局配置</td>
+<td>否</td>
+</tr>
+<tr>
+<td>agent create</td>
+<td>一个稳定 Agent 身份与覆盖配置</td>
+<td>否</td>
+</tr>
+<tr>
+<td>agent start</td>
+<td>一个承载 Agent 的运行进程</td>
+<td>否</td>
+</tr>
+<tr>
+<td>session create</td>
+<td>一段对话及其设置快照</td>
+<td>否</td>
+</tr>
+<tr>
+<td>chat send</td>
+<td>一次 Turn 的执行</td>
+<td>是，若该 Turn 的流程需要模型</td>
+</tr>
+</tbody>
+</table></div>
+<p>这里的命令名是概念性命名，当前模拟骨架并没有这些完整命令。</p>
+<h3 id="121-init初始化应用">12.1 init：初始化应用</h3>
+<p>建议流程：解析 state_dir → 检查已有文件 → 创建私有目录 → 生成明确的初始配置 → 校验 → 保存。</p>
+<p>重复执行时不应无提示覆盖已有配置。可以报告“已初始化”，或只补齐明确缺失的目录。把操作设计为可重复执行，会减少第一次使用和故障恢复时的意外。</p>
+<p>默认工作目录可以由 init 明确创建，因为这是初始化行为的一部分。普通加载配置时不要因为某个拼错的路径而悄悄创建任意目录。</p>
+<h3 id="122-agent-create登记助手">12.2 agent create：登记助手</h3>
+<p>建议流程：校验 ID → 取得创建互斥 → 检查冲突 → 校验覆盖项与合并结果 → 发布 Agent 配置。</p>
+<p>第一版可以以有效的 Agent 配置目录作为注册来源，避免同时维护目录和另一个注册表。以后若引入数据库 Agent 表，必须明确谁是身份事实来源，以及如何迁移，不能出现两个来源互相覆盖。</p>
+<p>创建中途可能失败。如果已经创建一个空目录但配置尚未完整写入，它不应该被当作有效 Agent。可以使用临时目录准备、最后发布，或明确地验证必要文件；多文件创建的中断恢复要有规则。</p>
+<h3 id="123-session-create形成独立会话">12.3 session create：形成独立会话</h3>
+<p>建议由 Daemon 统一处理，而不是让多个 CLI 各自绕过服务写数据库：</p>
+<pre><code class="language-text">接收创建请求
+  → 找到 Agent 有效配置
+  → 应用允许的会话创建参数
+  → 校验模型、目录、工具与限额
+  → 生成 session_id
+  → 复制指定设置
+  → 在事务中保存 Session
+  → 返回结果
+</code></pre>
+<p>创建参数只能修改文档允许修改的字段。用户界面展示一个输入框，不代表客户端可以提交任意内部配置。</p>
+<p>以后 session create 支持工作目录覆盖时，同样只能在当前策略范围内选择，不能借此把 workspace 改成整个系统。</p>
+<h3 id="124-并发创建需要保证什么">12.4 并发创建需要保证什么</h3>
+<p>两个 CLI 同时创建同名 Agent，不能只用“先检查不存在，再写入”来保证唯一，因为两边都可能先看到不存在。互斥锁或数据库唯一约束要覆盖关键步骤。</p>
+<p>同样，配置更新不能只有原子替换文件，还要考虑两个写入者。写入者 A 和 B 都读取旧值，A 改模型、B 改超时；如果 B 用旧副本覆盖整个文件，A 的修改就丢了。锁、版本比较或事务要解决这个问题。</p>
+<h2 id="13-保存配置为什么也需要设计">13. 保存配置为什么也需要设计</h2>
+<h3 id="131-直接覆盖的中断问题">13.1 直接覆盖的中断问题</h3>
+<p>直接打开 config.json 并截断后写入，如果程序在一半时退出，文件可能成为不完整 JSON。下次服务甚至无法启动。</p>
+<p>第一版建议的写入流程是：</p>
+<pre><code class="language-text">取得配置写入锁
+  → 读取当前版本
+  → 修改内存对象并校验
+  → 在同一目录创建唯一临时文件
+  → 写入完整内容，设置合适权限
+  → 同步文件，关闭
+  → 重命名替换目标文件
+  → 按平台要求同步目录
+  → 释放锁
+</code></pre>
+<p>“同一目录”帮助保证临时文件和目标处于同一文件系统。唯一临时文件名避免不同写入者碰撞。失败时保留明确错误，并清理自己创建的临时资源。</p>
+<h3 id="132-原子性与持久性分别解决什么">13.2 原子性与持久性分别解决什么</h3>
+<p>原子性关心其他读者是否会看到半份新内容；持久性关心断电后内容是否已经稳定保存。重命名替换与同步文件、目录各自承担不同部分。</p>
+<p>不同平台和文件系统的保证不同。Go 文档明确提示 Rename 的平台差异；我们应以目标平台上的实现与验证为准，不能把一次 Rename 描述为所有平台上的完整事务。<a href="https://pkg.go.dev/os#Rename">Go os.Rename 文档</a></p>
+<p>此外，一个文件的原子替换不能把 config.json、agent.json、数据库和多个运行中 Daemon 一起变成原子更新。原项目复杂的 reload 和恢复机制，正是在处理这类跨对象一致性。</p>
+<h3 id="133-首版怎样控制复杂度">13.3 首版怎样控制复杂度</h3>
+<p>建议首版：配置变更保存到磁盘后，明确要求重启对应服务生效，不实现动态热重载。配置更新命令负责校验与保存；服务启动时重新加载并构建依赖。</p>
+<p>这样我们先处理两个状态：磁盘上的目标配置与进程当前已加载的配置。界面和日志要说明“已保存，重启后生效”，不能把保存成功描述为已经更新了正在执行的任务。</p>
+<p>未知 schema_version 应明确拒绝并提示迁移，不猜测新格式。schema_version 描述文件结构版本；它不等于你每修改一次模型就加一的配置修订号。文件格式版本、配置内容版本和运行实例 generation 是三个不同概念。</p>
+<h2 id="14-修改配置后到底影响谁">14. 修改配置后，到底影响谁</h2>
+<p>下面是建议的第一版行为，注意“重启后”这个前提：磁盘编辑本身不会改变当前进程。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>修改</th>
+<th>重启后新 Session</th>
+<th>重启后旧 Session</th>
+<th>正在运行的 Turn</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>默认模型</td>
+<td>使用新默认值</td>
+<td>保留会话模型，除非该路由失效</td>
+<td>编辑文件不改变当前执行；停止服务会取消它</td>
+</tr>
+<tr>
+<td>默认 workspace</td>
+<td>使用新目录</td>
+<td>保留原目录，仍须满足当前策略</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>Agent 附加 instructions</td>
+<td>使用新说明</td>
+<td>保留原说明，显式更新才改变</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>默认 timezone</td>
+<td>使用新时区</td>
+<td>保留会话时区</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>默认轮数</td>
+<td>使用新默认值</td>
+<td>保留请求值，但受当前硬上限约束</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>收紧 policy 或 Agent 工具集合</td>
+<td>只能使用新允许的能力</td>
+<td>不能继续使用被撤销能力</td>
+<td>首版通过停服务终止；已发生副作用不自动回退</td>
+</tr>
+<tr>
+<td>凭证轮换</td>
+<td>使用新凭证</td>
+<td>同样通过当前凭证系统使用新值</td>
+<td>进程环境变更需按下面的规则处理</td>
+</tr>
+<tr>
+<td>移除 Provider</td>
+<td>引用它的新配置校验失败</td>
+<td>使用它的会话无法直接继续，需显式换路由</td>
+<td>重启前已发出的请求不受磁盘编辑影响</td>
+</tr>
+</tbody>
+</table></div>
+<p>修改旧 Session 的模型或说明，应是单独操作。第一版建议在会话空闲时执行并记录改变；不用“修改全局默认值”来代替“修改指定会话”。</p>
+<p>如果新策略使旧 workspace 不再允许，不能悄悄换一个目录继续写文件。应说明该会话需要用户重新选择符合策略的工作区。</p>
+<p>文件路径相同也不保证文件系统对象相同。如果工作目录被删除后又重建，是否允许继续使用需由目录身份与工具层设计处理。会话里保存一个绝对路径只能稳定路径解释，不能保证对象永远没变。</p>
+<h2 id="15-凭证为什么单独处理">15. 凭证为什么单独处理</h2>
+<p>在配置中保存凭证引用，而不是保存密钥明文，例如一个未来真实 Provider 可以有：</p>
+<pre><code class="language-json">{
+  &quot;api_key_env&quot;: &quot;ROSETTA_MODEL_API_KEY&quot;
+}
+</code></pre>
+<p>这只是“从哪个环境变量取值”的示意，不是完整 Provider 配置。</p>
+<p>当进程创建模型客户端时，读取这个变量的实际值。会话保存 Provider 身份，不保存 API Key。错误信息、配置解释、日志和导出的会话都要避免输出密钥。</p>
+<p>环境变量并不是绝对安全的保险箱；它只是首版较简单的凭证传递方式。后续可以增加系统钥匙串或专用凭证存储，配置层仍然使用引用。</p>
+<h3 id="151-一个非常常见的误会">15.1 一个非常常见的误会</h3>
+<p>你在终端 A 启动了 Daemon，后来在终端 B 设置了新的环境变量。已经运行的 Daemon 不会因此自动获得终端 B 的变量。</p>
+<p>进程从启动环境继承变量。首版更换凭证后，需要从携带新环境的入口重启服务，或以后通过专用凭证更新接口处理。CLI 能读到新值，不代表服务进程也能读到。</p>
+<p>如果未来采用系统服务管理器，它的环境来源又与交互终端不同。届时应在部署文档中单独说明，而不是让用户反复在不同终端 export 试运气。</p>
+<h3 id="152-state_dir-的备份也需要分类">15.2 state_dir 的备份也需要分类</h3>
+<p>会话数据库、Agent 配置和技能资源属于重要持久数据；socket、锁文件的占用状态和 PID 不能被当作可恢复的运行进程。恢复时应重新启动服务并生成运行实例信息。</p>
+<p>SQLite 正在运行时的备份不能简单假设复制一个主数据库文件就一定完整，尤其在使用 WAL 时。存储课程会选择正式备份方法，或在服务完全停止并确认数据库状态后复制。这里先记住“哪些值得备份”和“怎样一致地备份”是两个问题。</p>
+<h2 id="16-完整推演上午创建下午修改晚上继续">16. 完整推演：上午创建，下午修改，晚上继续</h2>
+<p>把前面的规则放进一条时间线：</p>
+<p><strong>上午 09:00</strong>：全局默认模型 A、工作区 W1、最多 12 轮；personal 覆盖为最多 8 轮。策略允许读取 W1 和 Downloads，写入只允许 W1。</p>
+<p>创建 Session S1 后，它保存模型 A、W1、8 轮以及所请求的工具集合。你要求读取 Downloads 中的会议资料，工具可以在读取授权内访问；把结果写入 W1 时需要写入审批。</p>
+<p><strong>中午 12:00</strong>：你把全局默认模型改为 B，把默认工作区改为 W2，并在策略中授权 W2。保存配置，但暂未重启服务。</p>
+<p>此刻正在运行的 Daemon 仍使用原已加载配置；新建会话也仍按该进程当前配置处理。界面必须明确配置尚未应用，避免给用户造成修改已经生效的印象。</p>
+<p><strong>下午 13:00</strong>：你重启服务，创建 Session S2。S2 使用模型 B、W2，轮数仍是 8，因为 Agent 覆盖没有被删除。</p>
+<p>S1 保留模型 A、W1、8 轮。若旧模型路由仍有效且 W1 仍获授权，S1 可以按原设置继续。</p>
+<p><strong>下午 15:00</strong>：你撤销 Downloads 的读取授权并重启服务。S1 的历史仍可保留此前读取形成的内容，但下一次读取 Downloads 应被拒绝。撤销文件读取权限并不会自动删除已进入历史的内容；若你还要删除历史或禁止其继续发送给模型，需要相应的数据删除和上下文管理操作。</p>
+<p><strong>晚上 20:00</strong>：你显式把 S1 的模型切换为 B。系统在 S1 空闲时更新会话设置；下一 Turn 使用 B。这个操作不会反向修改全局默认，也不会修改 S2。</p>
+<p>这条时间线展示了三种不同变更：修改未来默认值、修改当前授权、修改指定会话。它们应有不同入口和行为。</p>
+<h2 id="17-本课建议形成的设计决定">17. 本课建议形成的设计决定</h2>
+<p>下面是本课的建议基线，后续讨论可以调整。它们不是已经实现的功能清单。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>编号</th>
+<th>建议决定</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D01</td>
+<td>通用个人助手，先提供默认 Agent personal</td>
+<td>明确首个使用主体</td>
+</tr>
+<tr>
+<td>D02</td>
+<td>稳定 Agent ID 与显示名称分离</td>
+<td>改名不破坏引用</td>
+</tr>
+<tr>
+<td>D03</td>
+<td>Agent 身份、Session、Turn、进程实例分别标识</td>
+<td>避免恢复和关联时混淆</td>
+</tr>
+<tr>
+<td>D04</td>
+<td>state_dir 与 workspace 分开，首版拒绝二者嵌套</td>
+<td>明确应用数据与任务产物边界</td>
+</tr>
+<tr>
+<td>D05</td>
+<td>配置使用 JSON，严格校验；覆盖语义按字段定义</td>
+<td>让修改结果可预测</td>
+</tr>
+<tr>
+<td>D06</td>
+<td>全局默认与 Agent 覆盖合成有效配置</td>
+<td>减少重复填写，又保持差异</td>
+</tr>
+<tr>
+<td>D07</td>
+<td>policy 独立于默认值，普通覆盖不能扩大权限</td>
+<td>防止默认值合并变成授权提升</td>
+</tr>
+<tr>
+<td>D08</td>
+<td>Session 复制模型、目录、时区、附加说明和请求设置</td>
+<td>防止旧会话随默认值漂移</td>
+</tr>
+<tr>
+<td>D09</td>
+<td>凭证和当前权限不永久复制到 Session</td>
+<td>允许轮换凭证、撤销授权</td>
+</tr>
+<tr>
+<td>D10</td>
+<td>一个 Turn 内固定执行设置</td>
+<td>多轮模型调用保持一致</td>
+</tr>
+<tr>
+<td>D11</td>
+<td>首版配置修改重启生效，暂不热重载</td>
+<td>先把生效语义做清楚</td>
+</tr>
+<tr>
+<td>D12</td>
+<td>配置保存有互斥与可靠替换，状态存储走事务</td>
+<td>处理并发写入和中断</td>
+</tr>
+</tbody>
+</table></div>
+<p>“默认 Agent 一个”与“一 Agent 一 Daemon”可以同时成立。前者是首版产品范围，后者是将来增加独立 Agent 时的进程边界。</p>
+<h2 id="18-以后实现这一课时怎样判断做对了">18. 以后实现这一课时，怎样判断做对了</h2>
+<p>测试应该验证行为约定，而不仅是重复函数内部步骤。以下是未来配置模块的验收场景，本次没有新增实现或执行这些测试。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>应有结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent 没写模型</td>
+<td>继承全局默认模型</td>
+</tr>
+<tr>
+<td>Agent 只覆盖 max_rounds</td>
+<td>超时和输出上限保持原默认</td>
+</tr>
+<tr>
+<td>Agent 设置 enabled_tools 为 []</td>
+<td>不启用任何工具</td>
+</tr>
+<tr>
+<td>Agent 写 max_rounds 为 0</td>
+<td>报字段错误，不能理解成无限</td>
+</tr>
+<tr>
+<td>model 只写 provider</td>
+<td>报配套字段不完整</td>
+</tr>
+<tr>
+<td>字段拼错或出现重复键</td>
+<td>拒绝并给出可定位信息</td>
+</tr>
+<tr>
+<td>出现不允许的 null</td>
+<td>拒绝，不静默继承</td>
+</tr>
+<tr>
+<td>workspace 与 state_dir 嵌套</td>
+<td>拒绝并说明边界冲突</td>
+</tr>
+<tr>
+<td>Agent 请求超出 policy 的工具</td>
+<td>创建或更新时拒绝</td>
+</tr>
+<tr>
+<td>更改默认模型并重启</td>
+<td>新会话使用新默认，旧会话保持自己的选择</td>
+</tr>
+<tr>
+<td>撤销文件读取权限并重启</td>
+<td>旧会话下一次读取同样被拒绝</td>
+</tr>
+<tr>
+<td>两个进程同时创建同 ID Agent</td>
+<td>恰好一个成功，另一个明确冲突</td>
+</tr>
+<tr>
+<td>配置写入过程中失败</td>
+<td>不留下可被误认作有效配置的半份内容</td>
+</tr>
+<tr>
+<td>展示有效配置</td>
+<td>同时能解释值来自哪一层，不展示密钥</td>
+</tr>
+<tr>
+<td>当前 Turn 运行时修改 Session</td>
+<td>按第一版规则拒绝，待空闲后修改</td>
+</tr>
+</tbody>
+</table></div>
+<p>上述场景跨越多个实现阶段。配置合并测试可以先做；涉及工具权限的场景必须等工具门控实现后再验收，不能只通过配置结构体测试就宣布权限已经生效。</p>
+<p>建议的实际实现拆分是：先实现纯配置解析和合并，再接路径及字段校验，再实现可靠保存和 init/agent create，最后在存储阶段实现 Session 快照。每一步都有可以单独解释的输入和输出。</p>
+<h2 id="19-离线练习与参考答案">19. 离线练习与参考答案</h2>
+<p>可以先遮住答案，自己用一两句话解释。你不需要写代码。</p>
+<h3 id="练习-1改默认模型">练习 1：改默认模型</h3>
+<p>S1 创建时使用 A。随后把全局默认改为 B，并重启 Daemon。S1 的下一轮应该使用什么？新创建的 S2 呢？</p>
+<p>参考答案：若 A 路由仍有效，S1 使用自己的 A；S2 使用 B。若要 S1 使用 B，需要显式修改 S1 设置。</p>
+<h3 id="练习-2工具空数组">练习 2：工具空数组</h3>
+<p>全局 enabled_tools 是 read/write，Agent 覆盖为 []。它是继承全部工具，还是不启用工具？</p>
+<p>参考答案：不启用工具。缺失与空数组不同；数组整体替换。</p>
+<h3 id="练习-3读路径与写路径">练习 3：读路径与写路径</h3>
+<p>workspace 为 W，允许读取 W 和 Downloads，只允许写 W。用户同意“把文件改好”，是否可以直接写 Downloads？</p>
+<p>参考答案：不可以。操作审批不自动扩大路径授权。需要先明确调整授权，或者把结果写到 W。</p>
+<h3 id="练习-4单写锁保护了什么">练习 4：单写锁保护了什么</h3>
+<p>Session A 和 B 都能写同一个工作区。同一个 Session 只允许一个 Turn，就能防止两个会话覆盖同一文件吗？</p>
+<p>参考答案：不能。会话单写保护各自对话执行的顺序；跨会话的文件冲突需要文件版本检查、工作区协调或其他机制。</p>
+<h3 id="练习-5环境变量更新">练习 5：环境变量更新</h3>
+<p>在一个新终端设置新 API Key，已经运行的 Daemon 会马上使用它吗？</p>
+<p>参考答案：不会自动更新。要让服务从合适的环境重启，或者通过未来专用凭证更新机制生效。</p>
+<h3 id="练习-6只做-rename">练习 6：只做 Rename</h3>
+<p>使用临时文件加 Rename，就能保证两个同时进行的 config set 不丢失彼此的修改吗？</p>
+<p>参考答案：不能。完整文件替换与并发更新顺序是不同问题；还需要锁、版本比较或事务。持久性也需另行考虑。</p>
+<h3 id="练习-7权限撤销与历史">练习 7：权限撤销与历史</h3>
+<p>撤销 Downloads 的读取授权之后，过去已经读取并写进对话的内容会自动消失吗？</p>
+<p>参考答案：不会。读取授权影响后续操作，历史删除和是否允许继续发送已有内容是另外的策略与数据处理问题。</p>
+<h3 id="练习-8三个版本">练习 8：三个版本</h3>
+<p>schema_version、配置内容修订号、Daemon generation 分别表示什么？</p>
+<p>参考答案：文件格式结构版本、某一版配置内容、某次进程运行代际。修改模型不必改变文件格式版本；重启服务也不一定修改配置内容。</p>
+<h3 id="练习-9个人助手是不是一个超长会话">练习 9：个人助手是不是一个超长会话</h3>
+<p>同一个 personal 助手同时处理旅行和会议资料，是否应该把所有消息放进同一段对话？</p>
+<p>参考答案：通常分别建立 Session。跨会话共享必要信息由明确的记忆和授权规则处理，避免每次输入都混入所有历史。</p>
+<h3 id="练习-10路径相同是否代表目录相同">练习 10：路径相同是否代表目录相同</h3>
+<p>旧工作目录被删除，又在同一路径创建了新目录。Session 保存的绝对路径没有改变，是否就能证明任务仍在原目录执行？</p>
+<p>参考答案：不能。绝对路径稳定了解释方式，不保证文件系统对象身份稳定。目录身份校验属于文件工具与执行边界设计。</p>
+<h2 id="20-随手查阅的术语表">20. 随手查阅的术语表</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>术语</th>
+<th>本项目里的含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent</td>
+<td>有稳定身份、默认设置和能力边界的助手</td>
+</tr>
+<tr>
+<td>Daemon</td>
+<td>承载 Agent 的长期运行服务进程</td>
+</tr>
+<tr>
+<td>Session</td>
+<td>独立对话及其设置和历史</td>
+</tr>
+<tr>
+<td>Turn</td>
+<td>一次输入触发的完整执行</td>
+</tr>
+<tr>
+<td>Round</td>
+<td>一个 Turn 中的一次模型调用</td>
+</tr>
+<tr>
+<td>Goal</td>
+<td>可跨 Turn 推进的长期目标</td>
+</tr>
+<tr>
+<td>Provider</td>
+<td>把统一模型请求转换为某个后端调用的适配器</td>
+</tr>
+<tr>
+<td>Runtime</td>
+<td>组织上下文、模型和工具循环的执行核心</td>
+</tr>
+<tr>
+<td>state_dir</td>
+<td>应用私有数据根目录</td>
+</tr>
+<tr>
+<td>workspace</td>
+<td>当前任务解释相对文件路径的默认根</td>
+</tr>
+<tr>
+<td>cwd</td>
+<td>某个进程的当前工作目录</td>
+</tr>
+<tr>
+<td>defaults</td>
+<td>在创建或解析时使用的默认值</td>
+</tr>
+<tr>
+<td>overrides</td>
+<td>明确替换部分默认值的覆盖项</td>
+</tr>
+<tr>
+<td>effective config</td>
+<td>合并并校验后的有效配置</td>
+</tr>
+<tr>
+<td>snapshot</td>
+<td>在某个时间点复制下来的指定值集合</td>
+</tr>
+<tr>
+<td>policy</td>
+<td>当前允许哪些操作及其硬上限</td>
+</tr>
+<tr>
+<td>approval</td>
+<td>对某项具体操作的用户决策</td>
+</tr>
+<tr>
+<td>credential</td>
+<td>访问外部服务所需的秘密凭据</td>
+</tr>
+<tr>
+<td>schema_version</td>
+<td>文件或数据结构的格式版本</td>
+</tr>
+<tr>
+<td>generation</td>
+<td>某个运行实例或资源版本的代际标识，具体含义由所属模块定义</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="21-读完以后下一步是什么">21. 读完以后，下一步是什么</h2>
+<p>先检查自己是否能够不用术语解释下面这句话：</p>
+<blockquote>
+<p>创建会话时保存一份适合持续对话的设置；每次执行使用稳定的会话选择，同时重新尊重当前生效的授权和资源上限。</p>
+</blockquote>
+<p>如果这句话已经清楚，身份与配置最重要的边界就建立起来了。</p>
+<p>下一步讨论配置加载与创建流程的实际实现：先画输入输出，再选择 Go 类型和函数，随后把“缺失、空值、覆盖、错误”几类情形做成可运行的例子。等你准备进入实现时，再修改应用代码。</p>
+<p>附加阅读与材料定位：原学习指南第 3 章对应基本对象，第 4 章对应目录与默认配置，第 8、29 章对应创建与写入，第 20、21 章对应配置变化与运行时边界。原文中的这些机制比本课当前实现范围更完整；我们保留它们作为后续学习目标。</p><footer>离线使用：直接在浏览器打开此文件。正文无外部依赖；官方文档链接仅供联网时补充阅读。应用功能仍以实际实现和验收记录为准。</footer></main></div></body></html>

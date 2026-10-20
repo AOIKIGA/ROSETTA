@@ -1,0 +1,8 @@
+.DS_Store
+/bin/
+/.rosetta/
+.env
+.env.*
+!.env.example
+*.test
+coverage.out
