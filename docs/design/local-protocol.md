@@ -1,6 +1,6 @@
-# M1 本地通信协议
+# 本地通信协议
 
-状态：已实现。协议版本：1。仅用于同一用户本机进程间通信。
+状态：2026-10-22 已实现。协议版本：2。仅用于同一用户本机进程间通信。升级增加了模型轮次和工具事件；CLI 和 Daemon 需要使用匹配版本。
 
 ## 传输
 
@@ -11,7 +11,7 @@ state 目录要求私有权限，socket 权限 0600。该机制隔离其他普�
 `GET /v1/health` 返回：
 
 ```json
-{"status":"ready","protocol":1,"provider":"mock"}
+{"status":"ready","protocol":2,"provider":"mock"}
 ```
 
 `POST /v1/chat` 请求：
@@ -27,14 +27,22 @@ session_id 允许 1–64 位 ASCII 字母、数字、下划线、短横线。mes
 成功准入后返回 HTTP 200，Content-Type 为 `application/x-ndjson`。每行是一个完整 JSON 对象，每发一行就 flush。
 
 ```json
-{"version":1,"run_id":"示意ID","session_id":"main","seq":1,"type":"turn.started"}
-{"version":1,"run_id":"示意ID","session_id":"main","seq":2,"type":"text.delta","text":"你好"}
-{"version":1,"run_id":"示意ID","session_id":"main","seq":3,"type":"turn.completed"}
+{"version":2,"run_id":"示意ID","session_id":"main","seq":1,"type":"turn.started"}
+{"version":2,"run_id":"示意ID","session_id":"main","seq":2,"type":"model.round.started","round":1}
+{"version":2,"run_id":"示意ID","session_id":"main","seq":3,"type":"tool.started","round":1,"tool_call_id":"call1","tool_name":"get_time"}
+{"version":2,"run_id":"示意ID","session_id":"main","seq":4,"type":"tool.finished","round":1,"tool_call_id":"call1","tool_name":"get_time","status":"ok"}
+{"version":2,"run_id":"示意ID","session_id":"main","seq":5,"type":"model.round.started","round":2}
+{"version":2,"run_id":"示意ID","session_id":"main","seq":6,"type":"text.delta","round":2,"text":"查询到的当前时间是……"}
+{"version":2,"run_id":"示意ID","session_id":"main","seq":7,"type":"turn.completed","round":2}
 ```
 
 run_id 实际使用 16 个随机字节的十六进制编码；seq 在每个 run 内从 1 连续递增。同一次请求里 session_id、run_id 和 version 不变。
 
-正常路径是 started → 零个或多个 delta → completed。执行失败在连接可用时发 `turn.failed`，附带 `provider_error`、`deadline_exceeded` 或 `canceled` 错误类别；不会把原始 Provider 错误直接返回给客户端。
+正常路径是 started → 一个或多个模型轮次（可包含文本和工具事件）→ completed。没有工具调用的问答也包含一个 model.round.started。round 表示模型调用序号，seq 表示整个 run 的事件序号。
+
+tool.finished 的 status 为 ok 或 error；失败类别在 error 字段中，duration_ms 表示耗时，值为 0 时可省略。工具业务失败可以交给模型修正，因此 tool.finished:error 不一定导致 turn.failed。工具参数和原始结果默认不进入本地显示事件。
+
+执行失败在连接可用时发 turn.failed。类别包括 provider_error、provider_http_*、provider_incomplete_response、provider_invalid_event、provider_invalid_tool_call、provider_response_limit、round_limit、tool_call_limit、input_limit、deadline_exceeded 和 canceled 等受控值；不会把原始 Provider 错误直接返回给客户端。
 
 HTTP 200 只表示开始流，不表示 turn 成功。客户端必须收到 `turn.completed` 才认为成功；中途 EOF 视为不完整结果。断连时无法保证客户端收到 failed 事件。
 
@@ -55,8 +63,8 @@ HTTP 200 只表示开始流，不表示 turn 成功。客户端必须收到 `tur
 
 ## 取消与重连
 
-M1 采用请求连接绑定的执行方式。客户端取消 HTTP 请求时，服务端 request context 取消，Provider 退出，session 准入记录释放。
+采用请求连接绑定的执行方式。客户端取消 HTTP 请求时，服务端 request context 取消，Provider 或工具协作退出，session 准入记录释放。
 
-没有 detach、事件持久化、自动重连或重放。用户重试会创建新的 run；M1 无外部副作用。增加写文件或 exec 后，必须先实现工具执行记录，不能照搬自动重试。
+没有 detach、事件持久化、自动重连或重放。用户重试会创建新的 run；当前工具只有只读 get_time。增加写文件或 exec 后，必须先实现工具执行记录，不能照搬自动重试。
 
-限制：单 turn 两分钟；单次事件写入五秒；客户端单事件最大 1 MiB。协议目前只含文本事件，工具、审批和用量事件将在对应阶段扩展。
+限制：单 turn 两分钟；单次事件写入五秒；客户端单事件最大 1 MiB。每个 turn 最多六轮模型、八次工具调用，单轮最多四个工具。审批和用量事件留待后续扩展。

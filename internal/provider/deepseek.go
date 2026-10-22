@@ -1,15 +1,15 @@
 package provider
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"rosetta/internal/llm"
 )
 
 const DefaultDeepSeekModel = "deepseek-flash"
@@ -23,10 +23,7 @@ type DeepSeek struct {
 }
 
 // PublicError carries a safe category, never a raw upstream response or key.
-type PublicError struct{ Code string }
-
-func (e *PublicError) Error() string      { return e.Code }
-func (e *PublicError) PublicCode() string { return e.Code }
+type PublicError = llm.Error
 
 func NewDeepSeek(apiKey, model string, maxTokens int) (*DeepSeek, error) {
 	apiKey = strings.TrimSpace(apiKey)
@@ -53,19 +50,35 @@ func NewDeepSeek(apiKey, model string, maxTokens int) (*DeepSeek, error) {
 
 func (*DeepSeek) Name() string { return "deepseek" }
 
-func (p *DeepSeek) Stream(ctx context.Context, message string, emit func(string) error) error {
+func (p *DeepSeek) Stream(ctx context.Context, input llm.Request, emit func(string) error) (llm.Response, error) {
+	messages := make([]apiMessage, 0, len(input.Messages))
+	for _, message := range input.Messages {
+		wire := apiMessage{Role: message.Role, Content: message.Content, ToolCallID: message.ToolCallID}
+		for _, call := range message.ToolCalls {
+			wire.ToolCalls = append(wire.ToolCalls, apiToolCall{ID: call.ID, Type: "function", Function: apiFunction{Name: call.Name, Arguments: call.Arguments}})
+		}
+		messages = append(messages, wire)
+	}
+	tools := make([]apiToolSpec, 0, len(input.Tools))
+	for _, spec := range input.Tools {
+		tools = append(tools, apiToolSpec{Type: "function", Function: apiFunctionSpec{Name: spec.Name, Description: spec.Description, Parameters: spec.Parameters}})
+	}
 	body, err := json.Marshal(map[string]any{
 		"model":    p.model,
-		"messages": []map[string]string{{"role": "user", "content": message}},
+		"messages": messages,
+		"tools":    tools,
 		"stream":   true, "max_tokens": p.maxTokens,
 		"thinking": map[string]string{"type": "disabled"},
 	})
 	if err != nil {
-		return err
+		return llm.Response{}, &PublicError{Code: "provider_request_error"}
+	}
+	if len(body) > llm.MaxInputBytes {
+		return llm.Response{}, &PublicError{Code: "input_limit"}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return &PublicError{Code: "provider_request_error"}
+		return llm.Response{}, &PublicError{Code: "provider_request_error"}
 	}
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -73,99 +86,44 @@ func (p *DeepSeek) Stream(ctx context.Context, message string, emit func(string)
 	resp, err := p.client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return llm.Response{}, ctx.Err()
 		}
-		return &PublicError{Code: "provider_connection_error"}
+		return llm.Response{}, &PublicError{Code: "provider_connection_error"}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		// Do not return the body: it can echo credentials or user input.
-		return &PublicError{Code: fmt.Sprintf("provider_http_%d", resp.StatusCode)}
+		return llm.Response{}, &PublicError{Code: fmt.Sprintf("provider_http_%d", resp.StatusCode)}
 	}
 	return readDeepSeekStream(ctx, resp.Body, emit)
 }
 
-func readDeepSeekStream(ctx context.Context, body io.Reader, emit func(string) error) error {
-	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 4096), 1<<20)
-	var data strings.Builder
-	finished, hasText := false, false
-	// SSE can contain comments, blank lines and multiple data lines per event.
-	consume := func(payload string) (bool, error) {
-		if payload == "[DONE]" {
-			if !finished || !hasText {
-				return false, &PublicError{Code: "provider_incomplete_response"}
-			}
-			return true, nil
-		}
-		var chunk struct {
-			Error   json.RawMessage `json:"error"`
-			Choices []struct {
-				Delta struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-				FinishReason *string `json:"finish_reason"`
-			} `json:"choices"`
-		}
-		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
-			return false, &PublicError{Code: "provider_invalid_event"}
-		}
-		if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
-			return false, &PublicError{Code: "provider_stream_error"}
-		}
-		for _, choice := range chunk.Choices {
-			if choice.Delta.Content != "" {
-				if finished {
-					return false, &PublicError{Code: "provider_invalid_event"}
-				}
-				hasText = true
-				if err := emit(choice.Delta.Content); err != nil {
-					return false, err
-				}
-			}
-			if choice.FinishReason != nil {
-				switch *choice.FinishReason {
-				case "stop":
-					finished = true
-				case "length":
-					return false, &PublicError{Code: "provider_output_limit"}
-				default:
-					return false, &PublicError{Code: "provider_unsupported_finish"}
-				}
-			}
-		}
-		return false, nil
-	}
-	for scanner.Scan() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		line := scanner.Text()
-		if line == "" {
-			if data.Len() == 0 {
-				continue
-			}
-			done, err := consume(strings.TrimSuffix(data.String(), "\n"))
-			data.Reset()
-			if done || err != nil {
-				return err
-			}
-		} else if line == "data" || strings.HasPrefix(line, "data:") {
-			value := strings.TrimPrefix(strings.TrimPrefix(line, "data"), ":")
-			value = strings.TrimPrefix(value, " ")
-			if data.Len()+len(value)+1 > 1<<20 {
-				return &PublicError{Code: "provider_event_too_large"}
-			}
-			data.WriteString(value)
-			data.WriteByte('\n')
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if scanner.Err() != nil {
-		return &PublicError{Code: "provider_stream_error"}
-	}
-	// EOF alone is not proof of a completed generation.
-	return &PublicError{Code: "provider_incomplete_response"}
+// These wire types stay inside the adapter; the runtime uses llm types.
+type apiMessage struct {
+	Role       string        `json:"role"`
+	Content    string        `json:"content"`
+	ToolCalls  []apiToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string        `json:"tool_call_id,omitempty"`
+}
+
+type apiFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+type apiToolCall struct {
+	ID       string      `json:"id"`
+	Type     string      `json:"type"`
+	Function apiFunction `json:"function"`
+}
+
+type apiToolSpec struct {
+	Type     string          `json:"type"`
+	Function apiFunctionSpec `json:"function"`
+}
+
+type apiFunctionSpec struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
 }

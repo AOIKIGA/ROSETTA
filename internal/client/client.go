@@ -85,7 +85,7 @@ func (c *Client) Chat(ctx context.Context, req protocol.ChatRequest, onEvent fun
 			if seq != 1 {
 				return fmt.Errorf("duplicate turn.started")
 			}
-		case protocol.TextDelta, protocol.Completed, protocol.Failed:
+		case protocol.TextDelta, protocol.Completed, protocol.Failed, protocol.RoundStarted, protocol.ToolStarted, protocol.ToolFinished:
 		default:
 			return fmt.Errorf("unsupported event type: %s", event.Type)
 		}

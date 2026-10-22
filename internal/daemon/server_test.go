@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"rosetta/internal/agent"
+	"rosetta/internal/llm"
 	"rosetta/internal/provider"
 )
 
@@ -20,16 +21,16 @@ type blockingProvider struct {
 
 func (blockingProvider) Name() string { return "test" }
 
-func (p blockingProvider) Stream(ctx context.Context, _ string, _ func(string) error) error {
+func (p blockingProvider) Stream(ctx context.Context, _ llm.Request, _ func(string) error) (llm.Response, error) {
 	p.entered <- struct{}{}
 	<-ctx.Done()
-	return ctx.Err()
+	return llm.Response{}, ctx.Err()
 }
 
 func testLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
 func TestInvalidRequests(t *testing.T) {
-	s := New(agent.New(provider.Mock{}), testLogger())
+	s := New(agent.New(provider.Mock{}, nil), testLogger())
 	for _, body := range []string{
 		`{}`, `{"session_id":"../bad","message":"hi"}`,
 		`{"session_id":"main","message":" "}`,
@@ -48,7 +49,7 @@ func TestInvalidRequests(t *testing.T) {
 
 func TestAdmissionAndCancellationRelease(t *testing.T) {
 	p := blockingProvider{entered: make(chan struct{}, 4)}
-	s := New(agent.New(p), testLogger())
+	s := New(agent.New(p, nil), testLogger())
 	handler := s.Handler()
 	var cancels []context.CancelFunc
 	var done []chan struct{}

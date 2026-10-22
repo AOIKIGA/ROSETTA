@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"rosetta/internal/llm"
 )
 
 const textFrame = "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"},\"finish_reason\":null}]}\n\n"
@@ -47,7 +49,7 @@ func TestDeepSeekRequestAndStreaming(t *testing.T) {
 	}
 	p.endpoint = srv.URL
 	var text strings.Builder
-	err = p.Stream(context.Background(), "hello", func(delta string) error { text.WriteString(delta); return nil })
+	_, err = p.Stream(context.Background(), userRequest("hello"), func(delta string) error { text.WriteString(delta); return nil })
 	if err != nil || text.String() != "你好" {
 		t.Fatalf("text=%q err=%v", text.String(), err)
 	}
@@ -60,12 +62,12 @@ func TestDeepSeekIncompleteAndFailedStreams(t *testing.T) {
 		{"no_stop", textFrame + doneFrame, "provider_incomplete_response"},
 		{"empty", stopFrame + doneFrame, "provider_incomplete_response"},
 		{"limit", textFrame + strings.ReplaceAll(stopFrame, "stop", "length"), "provider_output_limit"},
-		{"tool", textFrame + strings.ReplaceAll(stopFrame, "stop", "tool_calls"), "provider_unsupported_finish"},
+		{"tool", textFrame + strings.ReplaceAll(stopFrame, "stop", "tool_calls"), "provider_incomplete_response"},
 		{"bad_json", "data: {bad}\n\n", "provider_invalid_event"},
 		{"upstream_error", "data: {\"error\":{\"message\":\"sensitive text\"}}\n\n", "provider_stream_error"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := readDeepSeekStream(context.Background(), strings.NewReader(tc.input), func(string) error { return nil })
+			_, err := readDeepSeekStream(context.Background(), strings.NewReader(tc.input), func(string) error { return nil })
 			var public *PublicError
 			if !errors.As(err, &public) || public.Code != tc.code {
 				t.Fatalf("err=%v; want %s", err, tc.code)
@@ -77,7 +79,7 @@ func TestDeepSeekIncompleteAndFailedStreams(t *testing.T) {
 func TestDeepSeekMultilineSSEAndConsumerError(t *testing.T) {
 	input := "data: {\"choices\":\r\ndata: [{\"delta\":{\"content\":\"hello\"}}]}\r\n\r\n" + stopFrame + doneFrame
 	want := errors.New("consumer closed")
-	err := readDeepSeekStream(context.Background(), strings.NewReader(input), func(string) error { return want })
+	_, err := readDeepSeekStream(context.Background(), strings.NewReader(input), func(string) error { return want })
 	if !errors.Is(err, want) {
 		t.Fatalf("err=%v", err)
 	}
@@ -91,7 +93,7 @@ func TestDeepSeekHTTPErrorDoesNotExposeBody(t *testing.T) {
 	defer srv.Close()
 	p, _ := NewDeepSeek("test-credential", DefaultDeepSeekModel, 64)
 	p.endpoint = srv.URL
-	err := p.Stream(context.Background(), "hello", func(string) error { return nil })
+	_, err := p.Stream(context.Background(), userRequest("hello"), func(string) error { return nil })
 	if err == nil || err.Error() != "provider_http_401" {
 		t.Fatalf("err=%v", err)
 	}
@@ -110,7 +112,7 @@ func TestDeepSeekCancellationClosesUpstream(t *testing.T) {
 	p.endpoint = srv.URL
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := p.Stream(ctx, "hello", func(string) error { cancel(); return nil })
+	_, err := p.Stream(ctx, userRequest("hello"), func(string) error { cancel(); return nil })
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err=%v", err)
 	}
@@ -128,8 +130,12 @@ func TestDeepSeekRejectsRedirect(t *testing.T) {
 	defer srv.Close()
 	p, _ := NewDeepSeek("test-credential", DefaultDeepSeekModel, 64)
 	p.endpoint = srv.URL
-	err := p.Stream(context.Background(), "hello", func(string) error { return nil })
+	_, err := p.Stream(context.Background(), userRequest("hello"), func(string) error { return nil })
 	if err == nil || err.Error() != "provider_http_307" {
 		t.Fatalf("err=%v", err)
 	}
+}
+
+func userRequest(text string) llm.Request {
+	return llm.Request{Messages: []llm.Message{{Role: "user", Content: text}}}
 }

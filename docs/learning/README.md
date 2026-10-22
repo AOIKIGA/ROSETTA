@@ -2,7 +2,9 @@
 
 当前项目方向：通用个人助手。2026-10-20 起进入小步实现阶段，保留 Daemon / Runtime 边界。
 
-当前实现入口：[Daemon / Runtime 与第一次 DeepSeek 问答](03-daemon-runtime-deepseek.md)。先跑一次完整请求，再逐步增加历史、工具和存储。下面的长讲义仍可用作参考，其中完整配置设计尚未实现。
+2026-10-22 当前实现：[从单次回答到 ReAct 工具循环](04-react-loop.md)。先用 mock 的 `/time` 跑通真实本地工具，再观察 DeepSeek 工具请求。配套 [设计说明](../design/react-loop.md) 记录职责、消息配对和停止条件。
+
+当前实现入口为第四课；[Daemon / Runtime 与第一次 DeepSeek 问答](03-daemon-runtime-deepseek.md) 是上一版本的基础链路。下面的长讲义仍可用作参考，其中完整配置设计尚未实现。
 
 ## 当前主课
 

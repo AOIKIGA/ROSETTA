@@ -17,8 +17,10 @@ import (
 	"rosetta/internal/agent"
 	"rosetta/internal/client"
 	"rosetta/internal/daemon"
+	"rosetta/internal/llm"
 	"rosetta/internal/protocol"
 	"rosetta/internal/provider"
+	"rosetta/internal/tool"
 )
 
 func main() {
@@ -39,7 +41,7 @@ func main() {
 
 func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		_, err := fmt.Fprintln(out, `ROSETTA — Daemon + Runtime 单次问答
+		_, err := fmt.Fprintln(out, `ROSETTA — Daemon + Runtime 工具循环
 
 用法：
   rosetta serve  [--state-dir DIR] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512]
@@ -47,7 +49,8 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
   rosetta chat   [--state-dir DIR] [--session main] [--json] -m "你好"
 
 DeepSeek 模式从 DEEPSEEK_API_KEY 环境变量读取密钥。默认 mock 不联网。
-当前没有历史记忆、会话持久化或文件/命令工具。默认目录：~/.rosetta`)
+内置 get_time；mock 下发送 -m /time 可离线观察两轮工具调用。
+当前没有跨请求历史记忆、会话持久化或文件/命令工具。默认目录：~/.rosetta`)
 		return err
 	}
 	command := args[0]
@@ -90,7 +93,7 @@ DeepSeek 模式从 DEEPSEEK_API_KEY 环境变量读取密钥。默认 mock 不�
 	}
 	if command == "serve" {
 		logger := slog.New(slog.NewTextHandler(errOut, nil))
-		var backend agent.TextProvider
+		var backend llm.Provider
 		switch providerName {
 		case "mock":
 			backend = provider.Mock{Delay: 60 * time.Millisecond}
@@ -102,7 +105,11 @@ DeepSeek 模式从 DEEPSEEK_API_KEY 环境变量读取密钥。默认 mock 不�
 		default:
 			return fmt.Errorf("unknown provider %q (choose mock or deepseek)", providerName)
 		}
-		runtime := agent.New(backend)
+		tools, err := tool.NewRegistry(tool.Time{})
+		if err != nil {
+			return err
+		}
+		runtime := agent.New(backend, tools)
 		return daemon.New(runtime, logger).Serve(ctx, absDir)
 	}
 	c := client.New(daemon.SocketPath(absDir))
@@ -125,6 +132,15 @@ DeepSeek 模式从 DEEPSEEK_API_KEY 环境变量读取密钥。默认 mock 不�
 			return err
 		case protocol.Completed:
 			_, err := fmt.Fprintln(out)
+			return err
+		case protocol.RoundStarted:
+			_, err := fmt.Fprintf(errOut, "[第 %d 轮模型调用]\n", event.Round)
+			return err
+		case protocol.ToolStarted:
+			_, err := fmt.Fprintf(errOut, "[执行工具 %s]\n", event.ToolName)
+			return err
+		case protocol.ToolFinished:
+			_, err := fmt.Fprintf(errOut, "[工具 %s：%s (%d ms)]\n", event.ToolName, event.Status, event.DurationMS)
 			return err
 		}
 		return nil

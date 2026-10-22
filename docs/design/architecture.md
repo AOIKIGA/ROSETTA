@@ -1,5 +1,7 @@
 # ROSETTA 架构与技术选型
 
+> 2026-10-22 实现更新：有限轮次的模型/工具循环、get_time 和本地协议 v2 已落地。当前以 [ReAct 设计](react-loop.md) 和 [第四课](../learning/04-react-loop.md) 为准；下方仍保留早期选型记录。
+
 > 2026-10-18 状态说明：本文保留早期“本地编码助手”的选型草案与原型记录。用户现已确定方向为通用个人助手，并要求先逐项讨论设计再实现。当前身份与配置设计以 [新讲义](../learning/02-identity-and-configuration.md) 为讨论基线；本文尚未整体改写，不能将早期范围和里程碑视为最终确认方案。
 
 > 2026-10-20 实现更新：用户已提供 DeepSeek 接入条件并授权开始小步实现。第一个真实 Provider 已改为 DeepSeek，沿用 Daemon / Runtime 分层；本页早期 OpenAI 首选和 M0–M6 顺序为历史草案。当前实现与学习入口见 [真实问答教程](../learning/03-daemon-runtime-deepseek.md)。

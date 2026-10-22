@@ -14,12 +14,14 @@ import (
 // Test the decoder with real HTTP chunks without depending on a live provider.
 func TestStreamValidation(t *testing.T) {
 	frame := func(seq int, kind string) string {
-		return fmt.Sprintf(`{"version":1,"run_id":"run1","session_id":"main","seq":%d,"type":%q}`+"\n", seq, kind)
+		return fmt.Sprintf(`{"version":%d,"run_id":"run1","session_id":"main","seq":%d,"type":%q}`+"\n", protocol.Version, seq, kind)
 	}
 	for _, tc := range []struct {
 		name, body, want string
 	}{
 		{"complete", frame(1, protocol.Started) + frame(2, protocol.Completed), ""},
+		{"tool_events", frame(1, protocol.Started) + frame(2, protocol.RoundStarted) + frame(3, protocol.ToolStarted) + frame(4, protocol.ToolFinished) + frame(5, protocol.RoundStarted) + frame(6, protocol.TextDelta) + frame(7, protocol.Completed), ""},
+		{"old_protocol", strings.Replace(frame(1, protocol.Started), `"version":2`, `"version":1`, 1), "sequence mismatch"},
 		{"truncated", frame(1, protocol.Started), "incomplete"},
 		{"sequence_gap", frame(1, protocol.Started) + frame(3, protocol.Completed), "sequence mismatch"},
 		{"no_start", frame(1, protocol.Completed), "did not start"},

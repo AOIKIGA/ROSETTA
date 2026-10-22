@@ -1,5 +1,18 @@
 # 开发路线与协作方式
 
+> 2026-10-22 当前实现：单个 turn 内的 ReAct 工具循环已落地，内置 `get_time`，支持 DeepSeek 和离线 mock。学习入口见 [第四课](learning/04-react-loop.md)，边界见 [设计说明](design/react-loop.md)。接下来可继续添加只读工具、跨 turn 历史和持久化。
+
+## 2026-10-22：第一版工具循环
+
+- 增加 `llm` 统一模型类型和 `tool` 注册表；每次 Run 在局部维护 messages 和调用计数，串行执行工具。
+- Runtime 支持最多 6 轮模型调用、8 次工具调用、单轮 4 个工具，以及输入和输出限制；工具业务错误作为观察结果回传，取消和预算耗尽终止执行。
+- 内置 `get_time`，默认 Asia/Shanghai，校验 IANA 时区；Mock `/time` 可离线演示两轮模型调用和真实本地工具。
+- DeepSeek 适配器支持工具 schema、assistant/tool 消息与流式工具参数聚合；完整结束前不返回可执行的工具请求。
+- 本地协议升级至 2；CLI 展示模型轮次、工具状态和耗时，进度写 stderr，`--json` 保持 NDJSON。
+- 验证通过：`make check`（vet + race tests）与 `make build`；新增测试覆盖多工具配对、错误参数修正、轮次/工具预算、单工具超时、重复调用 ID、并发隔离、流式参数交错和异常断流。
+- 编译后的 CLI 冒烟通过：health v2、普通问答、两轮 get_time、JSON 事件顺序、stderr 进度、四个并发 session、Ctrl+C 后复用 session，以及服务退出和 socket 清理。临时状态目录已清理。
+- 本轮 DeepSeek 使用本地 HTTP 测试服务验证，没有发起真实付费模型请求；本阶段未加入跨请求历史、数据库、文件工具或后台进程管理。
+
 > 2026-10-20 当前安排：用户已明确开始小步实现，先保留 Daemon / Runtime 边界，接入 DeepSeek 跑通单次问答。当前教程见 [真实问答调用链](learning/03-daemon-runtime-deepseek.md)。以下 M0–M6 为早期范围记录，不要求一次实现全部功能；下一小步是内存中的历史消息。
 
 ## 2026-10-20：真实模型接入
