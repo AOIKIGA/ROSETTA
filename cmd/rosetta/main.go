@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"rosetta/internal/llm"
 	"rosetta/internal/protocol"
 	"rosetta/internal/provider"
+	"rosetta/internal/state"
 	"rosetta/internal/tool"
 )
 
@@ -39,23 +42,34 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, args []string, out, errOut io.Writer) error {
+func run(ctx context.Context, args []string, out, errOut io.Writer) (runErr error) {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		_, err := fmt.Fprintln(out, `ROSETTA — Daemon + Runtime 工具循环
+		_, err := fmt.Fprintln(out, `ROSETTA — 具名 Agent / 后台 Daemon / ReAct 工具循环
 
-用法：
-  rosetta serve  [--state-dir DIR] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512]
-  rosetta status [--state-dir DIR]          检查服务是否就绪
-  rosetta chat   [--state-dir DIR] [--session main] [--json] -m "你好"
+用法（省略 agent 时使用 personal）：
+  rosetta start  [agent] [--state-dir DIR] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512]
+  rosetta serve  [agent] [同 start 参数]   前台运行，Ctrl+C 停止
+  rosetta status [agent] [--state-dir DIR]
+  rosetta stop   [agent] [--state-dir DIR]
+  rosetta chat   [agent] [--state-dir DIR] [--session main] [--json] -m "你好"
 
-DeepSeek 模式从 DEEPSEEK_API_KEY 环境变量读取密钥。默认 mock 不联网。
+Agent 名称放在选项之前，允许 1–32 位 ASCII 字母/数字/_/-。
+默认根目录 ~/.rosetta；每个 Agent 存在 agents/<name>/ 下。
+agent.json 保存非敏感配置；显式启动参数只覆盖本次运行，不写回文件。
+DeepSeek 从启动环境的 DEEPSEEK_API_KEY 读取密钥，默认 mock 不联网。
+start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
 内置 get_time；mock 下发送 -m /time 可离线观察两轮工具调用。
-当前没有跨请求历史记忆、会话持久化或文件/命令工具。默认目录：~/.rosetta`)
+当前没有跨请求历史、用户命名空间或会话数据库。`)
 		return err
 	}
 	command := args[0]
-	if command != "serve" && command != "status" && command != "chat" {
+	if command != "serve" && command != "start" && command != "stop" && command != "status" && command != "chat" {
 		return fmt.Errorf("unknown command %q; run 'rosetta help'", command)
+	}
+	name := state.DefaultAgent
+	flagArgs := args[1:]
+	if len(flagArgs) > 0 && !strings.HasPrefix(flagArgs[0], "-") {
+		name, flagArgs = flagArgs[0], flagArgs[1:]
 	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -68,59 +82,149 @@ DeepSeek 模式从 DEEPSEEK_API_KEY 环境变量读取密钥。默认 mock 不�
 	var rawJSON bool
 	var providerName, model string
 	var maxTokens int
-	if command == "serve" {
+	var readyFD int
+	if command == "serve" || command == "start" {
 		flags.StringVar(&providerName, "provider", "mock", "model backend: mock or deepseek")
 		flags.StringVar(&model, "model", provider.DefaultDeepSeekModel, "DeepSeek model ID")
 		flags.IntVar(&maxTokens, "max-tokens", 512, "maximum output tokens per request (1-4096)")
+	}
+	if command == "serve" {
+		flags.IntVar(&readyFD, "ready-fd", 0, "internal startup pipe (reserved)")
 	}
 	if command == "chat" {
 		flags.StringVar(&message, "m", "", "message to send")
 		flags.StringVar(&session, "session", "main", "session identifier (M1: admission only, no history)")
 		flags.BoolVar(&rawJSON, "json", false, "print raw event frames")
 	}
-	if err := flags.Parse(args[1:]); err != nil {
+	if err := flags.Parse(flagArgs); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments: %v", flags.Args())
 	}
-	if *stateDir == "" {
-		return fmt.Errorf("state-dir must not be empty")
+	var readyPipe *os.File
+	if readyFD != 0 {
+		if readyFD != 3 {
+			return fmt.Errorf("invalid internal readiness descriptor")
+		}
+		readyPipe = os.NewFile(uintptr(readyFD), "readiness")
+		if readyPipe == nil {
+			return fmt.Errorf("missing readiness pipe")
+		}
+		defer func() {
+			if readyPipe != nil {
+				if runErr != nil {
+					_ = json.NewEncoder(readyPipe).Encode(daemon.Startup{Error: runErr.Error(), AlreadyRunning: errors.Is(runErr, daemon.ErrAlreadyRunning)})
+				}
+				_ = readyPipe.Close()
+			}
+		}()
 	}
-	absDir, err := filepath.Abs(*stateDir)
+	paths, err := state.Resolve(*stateDir, name)
 	if err != nil {
 		return err
 	}
-	if command == "serve" {
-		logger := slog.New(slog.NewTextHandler(errOut, nil))
-		var backend llm.Provider
-		switch providerName {
-		case "mock":
-			backend = provider.Mock{Delay: 60 * time.Millisecond}
-		case "deepseek":
-			backend, err = provider.NewDeepSeek(os.Getenv("DEEPSEEK_API_KEY"), model, maxTokens)
+	if err := paths.Check(); err != nil {
+		return err
+	}
+	if command == "start" || command == "serve" {
+		defaults := state.Config{Version: 1, Agent: name, Provider: "mock", Model: provider.DefaultDeepSeekModel, MaxTokens: 512}
+		cfg, err := paths.LoadConfig(defaults)
+		if err != nil {
+			return err
+		}
+		flags.Visit(func(f *flag.Flag) {
+			switch f.Name {
+			case "provider":
+				cfg.Provider = providerName
+			case "model":
+				cfg.Model = model
+			case "max-tokens":
+				cfg.MaxTokens = maxTokens
+			}
+		})
+		if cfg.Provider != "mock" && cfg.Provider != "deepseek" {
+			return fmt.Errorf("provider must be mock or deepseek")
+		}
+		if strings.TrimSpace(cfg.Model) == "" || len(cfg.Model) > 128 {
+			return fmt.Errorf("model must be nonblank and at most 128 bytes")
+		}
+		if cfg.MaxTokens < 1 || cfg.MaxTokens > 4096 {
+			return fmt.Errorf("max-tokens must be 1-4096")
+		}
+		if command == "start" {
+			if err := paths.Ensure(); err != nil {
+				return err
+			}
+			if err := paths.InitConfig(defaults); err != nil {
+				return err
+			}
+			childArgs := []string{"serve", name, "--state-dir", paths.Root, "--provider", cfg.Provider, "--model", cfg.Model, "--max-tokens", strconv.Itoa(cfg.MaxTokens)}
+			health, existing, err := daemon.Start(ctx, paths, childArgs)
 			if err != nil {
 				return err
 			}
-		default:
-			return fmt.Errorf("unknown provider %q (choose mock or deepseek)", providerName)
+			action := "已启动"
+			if existing {
+				action = "已在运行（本次启动参数未应用）"
+			}
+			_, err = fmt.Fprintf(out, "%s %s (pid=%d, instance=%s)\n日志：%s\n", name, action, health.PID, health.InstanceID, paths.Log)
+			return err
+		}
+		logger := slog.New(slog.NewTextHandler(errOut, nil))
+		var backend llm.Provider
+		switch cfg.Provider {
+		case "mock":
+			backend = provider.Mock{Delay: 60 * time.Millisecond}
+		case "deepseek":
+			backend, err = provider.NewDeepSeek(os.Getenv("DEEPSEEK_API_KEY"), cfg.Model, cfg.MaxTokens)
+			if err != nil {
+				return err
+			}
+		}
+		if err := paths.Ensure(); err != nil {
+			return err
+		}
+		if err := paths.InitConfig(defaults); err != nil {
+			return err
 		}
 		tools, err := tool.NewRegistry(tool.Time{})
 		if err != nil {
 			return err
 		}
 		runtime := agent.New(backend, tools)
-		return daemon.New(runtime, logger).Serve(ctx, absDir)
+		var ready func(protocol.Health) error
+		if readyPipe != nil {
+			ready = func(health protocol.Health) error {
+				err := json.NewEncoder(readyPipe).Encode(daemon.Startup{Health: health})
+				_ = readyPipe.Close()
+				readyPipe = nil
+				return err
+			}
+		}
+		return daemon.New(runtime, logger).Serve(ctx, paths, ready)
 	}
-	c := client.New(daemon.SocketPath(absDir))
-	defer c.Close()
-	if command == "status" {
-		health, err := c.Health(ctx)
+	if command == "status" || command == "stop" {
+		var health protocol.Health
+		if command == "stop" {
+			health, err = daemon.Stop(ctx, paths)
+		} else {
+			health, err = daemon.Status(ctx, paths)
+		}
 		if err != nil {
 			return err
 		}
 		return json.NewEncoder(out).Encode(health)
 	}
+	health, err := daemon.Status(ctx, paths)
+	if err != nil {
+		return err
+	}
+	if health.Status != "ready" {
+		return fmt.Errorf("agent %s is %s; run 'rosetta start %s' first", name, health.Status, name)
+	}
+	c := client.New(paths.Socket)
+	defer c.Close()
 	encoder := json.NewEncoder(out)
 	return c.Chat(ctx, protocol.ChatRequest{SessionID: session, Message: message}, func(event protocol.Event) error {
 		if rawJSON {

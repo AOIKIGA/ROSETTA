@@ -1,7 +1,7 @@
 // Package protocol defines the local CLI/daemon wire format, independent of HTTP.
 package protocol
 
-const Version = 2
+const Version = 3
 
 const (
 	Started      = "turn.started"
@@ -35,12 +35,20 @@ type Event struct {
 }
 
 type Health struct {
-	Status   string `json:"status"`
-	Protocol int    `json:"protocol"`
-	Provider string `json:"provider"`
+	Status     string `json:"status"`
+	Protocol   int    `json:"protocol"`
+	Provider   string `json:"provider,omitempty"`
+	Agent      string `json:"agent"`
+	InstanceID string `json:"instance_id,omitempty"`
+	PID        int    `json:"pid,omitempty"`
+	StartedAt  string `json:"started_at,omitempty"`
 }
 
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type ShutdownRequest struct {
+	InstanceID string `json:"instance_id"`
 }

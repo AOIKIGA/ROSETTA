@@ -1,6 +1,17 @@
 # 开发路线与协作方式
 
-> 2026-10-22 当前实现：单个 turn 内的 ReAct 工具循环已落地，内置 `get_time`，支持 DeepSeek 和离线 mock。学习入口见 [第四课](learning/04-react-loop.md)，边界见 [设计说明](design/react-loop.md)。接下来可继续添加只读工具、跨 turn 历史和持久化。
+> 2026-10-22 当前实现：阶段 A 已加入具名 Agent、后台 start/status/stop、独立目录与持久化 agent.json。当前课程见 [第五课](learning/05-agent-daemon-lifecycle.md)。用户参数、SQLite 会话与跨 turn 历史属于后续 B/C 阶段。
+
+## 2026-10-22：阶段 A，Agent 与后台进程
+
+- `daemon.Server` 改为 `daemon.Daemon`，文件改为 daemon.go；内部保留标准库 http.Server。
+- CLI 支持可选 Agent 名称，默认 personal；start 使用独立进程和就绪管道，serve 保留前台运行。
+- 每个 Agent 独立的配置、socket、进程锁、实例元数据和日志；显式启动参数不写回配置，密钥不落盘。
+- status 验证进程锁和 socket；stop 根据实例 ID 请求关闭并等待释放锁，不对过期 PID 发信号。
+- 协议升至 v3；Runtime 的 ReAct 循环保持不变。
+- 验证：vet、race tests、真实 CLI 进程测试，覆盖双 Agent、并发启动、脱离启动进程组、聊天取消、失败启动与清理、正常关闭、崩溃恢复；均使用 mock/本地测试服务。
+- `make build` 与 Linux amd64 交叉编译通过；Linux 未进行运行验证。
+- 后续 B：用户/会话身份与 SQLite；后续 C：加载历史、完整消息持久化、完成提交与中断恢复。本次不创建 state.db。
 
 ## 2026-10-22：第一版工具循环
 

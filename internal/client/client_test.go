@@ -21,7 +21,7 @@ func TestStreamValidation(t *testing.T) {
 	}{
 		{"complete", frame(1, protocol.Started) + frame(2, protocol.Completed), ""},
 		{"tool_events", frame(1, protocol.Started) + frame(2, protocol.RoundStarted) + frame(3, protocol.ToolStarted) + frame(4, protocol.ToolFinished) + frame(5, protocol.RoundStarted) + frame(6, protocol.TextDelta) + frame(7, protocol.Completed), ""},
-		{"old_protocol", strings.Replace(frame(1, protocol.Started), `"version":2`, `"version":1`, 1), "sequence mismatch"},
+		{"old_protocol", strings.Replace(frame(1, protocol.Started), fmt.Sprintf(`"version":%d`, protocol.Version), `"version":1`, 1), "sequence mismatch"},
 		{"truncated", frame(1, protocol.Started), "incomplete"},
 		{"sequence_gap", frame(1, protocol.Started) + frame(3, protocol.Completed), "sequence mismatch"},
 		{"no_start", frame(1, protocol.Completed), "did not start"},

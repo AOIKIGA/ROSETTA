@@ -81,7 +81,7 @@ status 应显示 provider 为 deepseek。ready 表示本地服务已开始接收
 ## 4. 只沿着这条调用链读
 
 1. `cmd/rosetta/main.go` 的 `run`：读取 serve 参数和环境变量，创建 DeepSeek，再把它传给 Runtime，把 Runtime 传给 Daemon。
-2. `internal/daemon/server.go` 的 `chat`：收到本地请求后，调用 `s.runtime.Run(...)`。
+2. `internal/daemon/daemon.go` 的 `chat`：收到本地请求后，调用 `d.runtime.Run(...)`。
 3. `internal/agent/runtime.go` 的 `Run`：调用 `r.provider.Stream(...)`。
 4. `internal/provider/deepseek.go` 的 `Stream`：真正发送 HTTPS 请求。
 5. 同文件的 `readDeepSeekStream`：解析返回片段，调用 emit。

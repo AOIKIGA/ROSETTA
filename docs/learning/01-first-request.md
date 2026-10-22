@@ -36,7 +36,7 @@
 cmd/rosetta/main.go：run
     → internal/client/client.go：Chat
     → HTTP 请求穿过 Unix Socket
-    → internal/daemon/server.go：chat
+    → internal/daemon/daemon.go：chat
     → internal/agent/runtime.go：Run
     → internal/provider/mock.go：Stream
     → emit 回调一层层返回文本事件

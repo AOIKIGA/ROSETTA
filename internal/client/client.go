@@ -44,10 +44,31 @@ func (c *Client) Health(ctx context.Context) (protocol.Health, error) {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&health); err != nil {
 		return health, err
 	}
-	if health.Protocol != protocol.Version || health.Status != "ready" {
+	if health.Protocol != protocol.Version || (health.Status != "ready" && health.Status != "stopping") {
 		return health, fmt.Errorf("daemon is not ready or has an incompatible protocol")
 	}
 	return health, nil
+}
+
+// Shutdown addresses an observed instance, never a possibly recycled PID.
+func (c *Client) Shutdown(ctx context.Context, instanceID string) error {
+	body, err := json.Marshal(protocol.ShutdownRequest{InstanceID: instanceID})
+	if err != nil {
+		return err
+	}
+	resp, err := c.request(ctx, "POST", "/v1/shutdown", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	var health protocol.Health
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&health); err != nil {
+		return err
+	}
+	if health.Protocol != protocol.Version || health.InstanceID != instanceID || health.Status != "stopping" {
+		return fmt.Errorf("invalid shutdown acknowledgment")
+	}
+	return nil
 }
 
 func (c *Client) Chat(ctx context.Context, req protocol.ChatRequest, onEvent func(protocol.Event) error) error {
@@ -115,7 +136,7 @@ func (c *Client) request(ctx context.Context, method, path string, body io.Reade
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("connect to daemon (start 'rosetta serve' first): %w", err)
+		return nil, fmt.Errorf("connect to daemon (start 'rosetta start [agent]' first): %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
