@@ -55,7 +55,7 @@ func TestStopCancelsActiveTurnAndCleansInstance(t *testing.T) {
 	}
 	chatDone := make(chan error, 1)
 	go func() {
-		chatDone <- c.Chat(ctx, protocol.ChatRequest{SessionID: "main", Message: "hi"}, func(protocol.Event) error { return nil })
+		chatDone <- c.Chat(ctx, protocol.ChatRequest{Session: "main", Message: "hi"}, func(protocol.Event) error { return nil })
 	}()
 	select {
 	case <-p.entered:
@@ -117,7 +117,7 @@ func TestShutdownValidationAndAdmission(t *testing.T) {
 		}
 	}
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest("POST", "/v1/chat", strings.NewReader(`{"session_id":"main","message":"hi"}`)))
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/v1/chat", strings.NewReader(`{"session":"main","message":"hi"}`)))
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("admitted during shutdown: %d", w.Code)
 	}

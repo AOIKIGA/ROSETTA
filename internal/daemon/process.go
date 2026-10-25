@@ -25,6 +25,10 @@ type Startup struct {
 }
 
 func Status(ctx context.Context, paths state.Paths) (protocol.Health, error) {
+	return status(ctx, paths, false)
+}
+
+func status(ctx context.Context, paths state.Paths, allowPrevious bool) (protocol.Health, error) {
 	if err := paths.Check(); err != nil {
 		return protocol.Health{}, err
 	}
@@ -37,7 +41,12 @@ func Status(ctx context.Context, paths state.Paths) (protocol.Health, error) {
 	}
 	c := client.New(paths.Socket)
 	defer c.Close()
-	health, err := c.Health(ctx)
+	var health protocol.Health
+	if allowPrevious {
+		health, err = c.LifecycleHealth(ctx)
+	} else {
+		health, err = c.Health(ctx)
+	}
 	if err != nil {
 		return health, fmt.Errorf("agent %s holds its lock but is unavailable (starting, stopping or unresponsive): %w", paths.Agent, err)
 	}
@@ -171,7 +180,7 @@ func waitReady(ctx context.Context, paths state.Paths) (protocol.Health, error) 
 func Stop(parent context.Context, paths state.Paths) (protocol.Health, error) {
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
-	health, err := Status(ctx, paths)
+	health, err := status(ctx, paths, true)
 	if err != nil || health.Status == "stopped" {
 		return health, err
 	}
@@ -179,13 +188,13 @@ func Stop(parent context.Context, paths state.Paths) (protocol.Health, error) {
 	defer c.Close()
 	if err := c.Shutdown(ctx, health.InstanceID); err != nil {
 		// Another stop may have completed between health and shutdown.
-		if current, statusErr := Status(ctx, paths); statusErr == nil && current.Status == "stopped" {
+		if current, statusErr := status(ctx, paths, true); statusErr == nil && current.Status == "stopped" {
 			return current, nil
 		}
 		return health, err
 	}
 	for {
-		current, err := Status(ctx, paths)
+		current, err := status(ctx, paths, true)
 		if err == nil {
 			if current.Status == "stopped" {
 				return current, nil

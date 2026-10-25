@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"rosetta/internal/protocol"
+	"rosetta/internal/store"
 )
 
 // Exercise the actual binary: process detachment cannot be verified by calling run.
@@ -127,6 +128,32 @@ func TestDetachedLifecycle(t *testing.T) {
 		t.Fatal("chat cancellation stopped daemon")
 	}
 	must("chat", "personal", "-m", "/time") // Reuse the canceled session.
+	// Named users/sessions have separate durable histories within an agent.
+	must("chat", "personal", "--user", "alice", "--session", "main", "-m", "alice-secret")
+	must("chat", "personal", "--user", "bob", "--session", "main", "-m", "bob-secret")
+	must("chat", "personal", "--user", "alice", "--session", "learning", "-m", "lesson")
+	var aliceHistory store.HistoryPage
+	if err := json.Unmarshal(must("sessions", "show", "personal", "--user", "alice", "--session", "main", "--json"), &aliceHistory); err != nil {
+		t.Fatal(err)
+	}
+	if len(aliceHistory.Messages) != 2 || aliceHistory.Messages[0].Content != "alice-secret" || aliceHistory.Messages[1].Turn.Status != "completed" {
+		t.Fatalf("%+v", aliceHistory)
+	}
+	var aliceSessions store.SessionPage
+	if err := json.Unmarshal(must("sessions", "list", "personal", "--user", "alice", "--json"), &aliceSessions); err != nil || len(aliceSessions.Sessions) != 2 {
+		t.Fatalf("%+v %v", aliceSessions, err)
+	}
+	var defaultHistory store.HistoryPage
+	if err := json.Unmarshal(must("sessions", "show", "personal", "--json"), &defaultHistory); err != nil {
+		t.Fatal(err)
+	}
+	if defaultHistory.Session.User != "defaultuser" || defaultHistory.Session.Name != "main" {
+		t.Fatalf("%+v", defaultHistory.Session)
+	}
+	var workSessions store.SessionPage
+	if err := json.Unmarshal(must("sessions", "list", "work", "--user", "alice", "--json"), &workSessions); err != nil || len(workSessions.Sessions) != 0 {
+		t.Fatalf("cross-agent history: %+v %v", workSessions, err)
+	}
 	// A competing foreground serve must fail without changing the live instance.
 	if output, err := invoke("serve", "personal"); err == nil || !strings.Contains(string(output), "lock") {
 		t.Fatalf("duplicate serve: %v %s", err, output)
@@ -177,6 +204,13 @@ func TestDetachedLifecycle(t *testing.T) {
 	}
 	must("start", "personal", "--max-tokens", "64")
 	second := health("personal")
+	var restartedHistory store.HistoryPage
+	if err := json.Unmarshal(must("sessions", "show", "personal", "--user", "alice", "--json"), &restartedHistory); err != nil {
+		t.Fatal(err)
+	}
+	if restartedHistory.Session.ID != aliceHistory.Session.ID || len(restartedHistory.Messages) != 2 {
+		t.Fatal("restart lost session history")
+	}
 	if second.InstanceID == first.InstanceID {
 		t.Fatal("restart reused instance ID")
 	}

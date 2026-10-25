@@ -13,30 +13,31 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"rosetta/internal/agent"
+	"rosetta/internal/conversation"
+	"rosetta/internal/identity"
 	"rosetta/internal/protocol"
 	"rosetta/internal/state"
+	"rosetta/internal/store"
 )
-
-var sessionPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
 type Daemon struct {
 	runtime  *agent.Runtime
 	logger   *slog.Logger
 	mu       sync.Mutex
-	active   map[string]bool
+	active   map[identity.Scope]bool
+	store    *store.Store
 	health   protocol.Health
 	stopping bool
 	stop     chan struct{}
 }
 
 func New(runtime *agent.Runtime, logger *slog.Logger) *Daemon {
-	return &Daemon{runtime: runtime, logger: logger, active: make(map[string]bool), stop: make(chan struct{})}
+	return &Daemon{runtime: runtime, logger: logger, active: make(map[identity.Scope]bool), stop: make(chan struct{})}
 }
 
 func (d *Daemon) Handler() http.Handler {
@@ -49,6 +50,8 @@ func (d *Daemon) Handler() http.Handler {
 		_ = json.NewEncoder(w).Encode(health)
 	})
 	mux.HandleFunc("POST /v1/chat", d.chat)
+	mux.HandleFunc("GET /v1/sessions", d.sessions)
+	mux.HandleFunc("GET /v1/history", d.history)
 	mux.HandleFunc("POST /v1/shutdown", d.shutdown)
 	return mux
 }
@@ -66,10 +69,12 @@ func (d *Daemon) chat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "expected exactly one JSON object")
 		return
 	}
-	if !sessionPattern.MatchString(req.SessionID) || strings.TrimSpace(req.Message) == "" || len(req.Message) > 16<<10 {
-		writeError(w, http.StatusBadRequest, "invalid_request", "session_id: 1-64 letters/digits/_/-; message: nonblank, maximum 16 KiB")
+	scope, err := identity.Resolve(req.User, req.Session)
+	if err != nil || strings.TrimSpace(req.Message) == "" || len(req.Message) > 16<<10 {
+		writeError(w, http.StatusBadRequest, "invalid_request", "user/session: 1-64 ASCII letters/digits/_/-; message: nonblank, maximum 16 KiB")
 		return
 	}
+	req.User, req.Session = scope.User, scope.Session
 	// Hold the mutex only while changing bookkeeping, never during model calls.
 	d.mu.Lock()
 	if d.stopping {
@@ -77,7 +82,7 @@ func (d *Daemon) chat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "daemon_stopping", "daemon is stopping")
 		return
 	}
-	if d.active[req.SessionID] {
+	if d.active[scope] {
 		d.mu.Unlock()
 		writeError(w, http.StatusConflict, "session_busy", "this session already has an active turn")
 		return
@@ -87,11 +92,11 @@ func (d *Daemon) chat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "capacity_exceeded", "maximum 4 active turns")
 		return
 	}
-	d.active[req.SessionID] = true
+	d.active[scope] = true
 	d.mu.Unlock()
 	defer func() {
 		d.mu.Lock()
-		delete(d.active, req.SessionID)
+		delete(d.active, scope)
 		d.mu.Unlock()
 	}()
 
@@ -103,6 +108,15 @@ func (d *Daemon) chat(w http.ResponseWriter, r *http.Request) {
 	runID := hex.EncodeToString(id[:])
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
+	if d.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "storage_unavailable", "storage is not ready")
+		return
+	}
+	turn, err := d.store.BeginTurn(ctx, scope, runID, req.Message, d.runtime.ProviderName())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "cannot save this request")
+		return
+	}
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("Cache-Control", "no-store")
 	controller := http.NewResponseController(w)
@@ -114,27 +128,22 @@ func (d *Daemon) chat(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		seq++
-		event.Version, event.RunID, event.SessionID, event.Seq = protocol.Version, runID, req.SessionID, seq
+		event.Version, event.RunID, event.SessionID, event.Seq = protocol.Version, runID, turn.SessionID, seq
+		event.User, event.Session = scope.User, scope.Session
 		if err := encoder.Encode(event); err != nil {
 			return err
 		}
 		return controller.Flush()
 	}
-	err := d.runtime.Run(ctx, req, emit)
+	err = (conversation.Service{Runtime: d.runtime, Store: d.store}).Run(ctx, turn, req, emit)
 	if err != nil {
-		// Do not expose raw provider errors (which may contain credentials).
-		reason := "provider_error"
-		var publicError interface{ PublicCode() string }
-		if errors.As(err, &publicError) {
-			reason = publicError.PublicCode()
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			reason = "deadline_exceeded"
-		} else if errors.Is(err, context.Canceled) {
-			reason = "canceled"
+		reason := conversation.ErrorCode(err)
+		if errors.Is(err, conversation.ErrDelivery) {
+			d.logger.Info("completed turn not delivered", "run_id", runID)
+			return
 		}
 		_ = emit(protocol.Event{Type: protocol.Failed, Error: reason})
-		d.logger.Info("turn ended", "run_id", runID, "session_id", req.SessionID, "reason", reason)
+		d.logger.Info("turn ended", "run_id", runID, "user", scope.User, "session", scope.Session, "reason", reason)
 	}
 }
 
@@ -185,6 +194,14 @@ func (d *Daemon) Serve(parent context.Context, paths state.Paths, ready func(pro
 		return err
 	}
 	defer cleanup()
+	initCtx, initCancel := context.WithTimeout(ctx, 5*time.Second)
+	db, err := store.Open(initCtx, paths.Database, paths.Agent)
+	initCancel()
+	if err != nil {
+		return fmt.Errorf("open agent database: %w", err)
+	}
+	defer db.Close()
+	d.store = db
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
 		return err

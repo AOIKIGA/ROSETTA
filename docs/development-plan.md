@@ -1,6 +1,18 @@
 # 开发路线与协作方式
 
-> 2026-10-22 当前实现：阶段 A 已加入具名 Agent、后台 start/status/stop、独立目录与持久化 agent.json。当前课程见 [第五课](learning/05-agent-daemon-lifecycle.md)。用户参数、SQLite 会话与跨 turn 历史属于后续 B/C 阶段。
+> 2026-10-26 当前实现：阶段 B 已加入 SQLite、用户/会话归属、消息记录与历史查询。当前课程见 [存储与身份](learning/07-storage-and-identity.md)。阶段 C 再实现加载历史与上下文预算。
+
+## 2026-10-26：阶段 B，存储与身份
+
+- 从阶段 A 提交 `6165fd5` 开始，工作分支为 `codex/storage-identity`。文件工具与子 Agent 已保存在 `codex/file-tools-subagents`（`f99b7da`），未并入本次改动。
+- 每个 Agent 独立 `state.db`，使用 `database/sql` 和纯 Go SQLite 驱动 modernc.org/sqlite v1.61.0。启用外键、WAL、FULL 同步和 schema 版本检查；只由持有 Agent 锁的 daemon 打开并初始化。
+- 用户默认 defaultuser，会话默认 main；按 Agent / user / session 归属。首次聊天自动创建，读历史不创建。并发准入从会话名改为用户加会话名。
+- 增加 `sessions list`、`sessions show`、`--user`、分页和 JSON 查询。保存用户输入、完整 assistant/tool 消息、工具调用 ID 和运行状态。
+- 增加 conversation 协调层；先提交最终答案与 completed，再通知 CLI。取消/失败保留已完整记录的消息；重启将未结束运行标记 interrupted，不自动重做。
+- 协议 v4 区分用户输入的 session 名称与数据库内部 session_id；新版 stop 兼容阶段 A 的 v3，便于先停止旧 daemon 再启动新版。
+- 验证：vet、race tests、真实 CLI 重启与身份隔离通过；mock 与本地测试服务验证，无付费模型调用。
+- 构建：本机 `make build` 和关闭 CGO 的 Linux amd64 交叉编译通过；Linux 未做运行验证。
+- 范围：保存和查询历史。阶段 C 才把历史作为模型上下文，并确定失败/中断轮次如何选取、工具配对如何整理以及输入预算。
 
 ## 2026-10-22：阶段 A，Agent 与后台进程
 
@@ -11,7 +23,7 @@
 - 协议升至 v3；Runtime 的 ReAct 循环保持不变。
 - 验证：vet、race tests、真实 CLI 进程测试，覆盖双 Agent、并发启动、脱离启动进程组、聊天取消、失败启动与清理、正常关闭、崩溃恢复；均使用 mock/本地测试服务。
 - `make build` 与 Linux amd64 交叉编译通过；Linux 未进行运行验证。
-- 后续 B：用户/会话身份与 SQLite；后续 C：加载历史、完整消息持久化、完成提交与中断恢复。本次不创建 state.db。
+- 当时的后续计划：B 用户/会话身份与 SQLite，C 加载历史。当前 B 已同时完成完整消息记录、完成提交与中断标记，见上方最新记录；A 本身不创建 state.db。
 
 ## 2026-10-22：第一版工具循环
 

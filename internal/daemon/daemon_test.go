@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"rosetta/internal/agent"
 	"rosetta/internal/llm"
 	"rosetta/internal/provider"
+	"rosetta/internal/store"
 )
 
 type blockingProvider struct {
@@ -32,12 +34,12 @@ func testLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard,
 func TestInvalidRequests(t *testing.T) {
 	s := New(agent.New(provider.Mock{}, nil), testLogger())
 	for _, body := range []string{
-		`{}`, `{"session_id":"../bad","message":"hi"}`,
-		`{"session_id":"main","message":" "}`,
-		`{"session_id":"main","message":"hi","unknown":true}`,
-		`{"session_id":"main","message":"hi"} {}`,
-		`{"session_id":"main","message":"` + strings.Repeat("x", 17<<10) + `"}`,
-		`{"session_id":"main","message":"` + strings.Repeat("x", 65<<10) + `"}`,
+		`{}`, `{"session":"../bad","message":"hi"}`,
+		`{"session":"main","message":" "}`,
+		`{"session":"main","message":"hi","unknown":true}`,
+		`{"session":"main","message":"hi"} {}`,
+		`{"session":"main","message":"` + strings.Repeat("x", 17<<10) + `"}`,
+		`{"session":"main","message":"` + strings.Repeat("x", 65<<10) + `"}`,
 	} {
 		w := httptest.NewRecorder()
 		s.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/v1/chat", strings.NewReader(body)))
@@ -50,6 +52,12 @@ func TestInvalidRequests(t *testing.T) {
 func TestAdmissionAndCancellationRelease(t *testing.T) {
 	p := blockingProvider{entered: make(chan struct{}, 4)}
 	s := New(agent.New(p, nil), testLogger())
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "state.db"), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	s.store = db
 	handler := s.Handler()
 	var cancels []context.CancelFunc
 	var done []chan struct{}
@@ -63,7 +71,7 @@ func TestAdmissionAndCancellationRelease(t *testing.T) {
 		cancels = append(cancels, cancel)
 		finished := make(chan struct{})
 		done = append(done, finished)
-		req := httptest.NewRequest("POST", "/v1/chat", strings.NewReader(`{"session_id":"`+session+`","message":"hi"}`)).WithContext(ctx)
+		req := httptest.NewRequest("POST", "/v1/chat", strings.NewReader(`{"session":"`+session+`","message":"hi"}`)).WithContext(ctx)
 		go func() {
 			handler.ServeHTTP(httptest.NewRecorder(), req)
 			close(finished)
@@ -79,7 +87,7 @@ func TestAdmissionAndCancellationRelease(t *testing.T) {
 		status  int
 	}{{"a", 409}, {"e", 429}} {
 		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, httptest.NewRequest("POST", "/v1/chat", strings.NewReader(`{"session_id":"`+tc.session+`","message":"hi"}`)))
+		handler.ServeHTTP(w, httptest.NewRequest("POST", "/v1/chat", strings.NewReader(`{"session":"`+tc.session+`","message":"hi"}`)))
 		if w.Code != tc.status {
 			t.Fatalf("status = %d, want %d", w.Code, tc.status)
 		}

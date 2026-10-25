@@ -1,7 +1,7 @@
 // Package protocol defines the local CLI/daemon wire format, independent of HTTP.
 package protocol
 
-const Version = 3
+const Version = 4
 
 const (
 	Started      = "turn.started"
@@ -14,12 +14,15 @@ const (
 )
 
 type ChatRequest struct {
-	SessionID string `json:"session_id"`
-	Message   string `json:"message"`
+	User    string `json:"user"`
+	Session string `json:"session"`
+	Message string `json:"message"`
 }
 
 // Event is one newline-delimited JSON object. Seq starts at 1 within a run.
 type Event struct {
+	User       string `json:"user"`
+	Session    string `json:"session"`
 	Version    int    `json:"version"`
 	RunID      string `json:"run_id"`
 	SessionID  string `json:"session_id"`

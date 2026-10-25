@@ -16,7 +16,7 @@ const DefaultAgent = "personal"
 var agentPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,32}$`)
 
 type Paths struct {
-	Root, Agent, Dir, Run, Logs, Socket, Lock, Instance, Log, Config string
+	Root, Agent, Dir, Run, Logs, Socket, Lock, Instance, Log, Config, Database string
 }
 
 func Resolve(root, name string) (Paths, error) {
@@ -36,7 +36,7 @@ func Resolve(root, name string) (Paths, error) {
 	p := Paths{Root: abs, Agent: name, Dir: dir, Run: run, Logs: logs,
 		Socket: filepath.Join(run, "daemon.sock"), Lock: filepath.Join(run, "daemon.lock"),
 		Instance: filepath.Join(run, "instance.json"), Log: filepath.Join(logs, "daemon.log"),
-		Config: filepath.Join(dir, "agent.json")}
+		Config: filepath.Join(dir, "agent.json"), Database: filepath.Join(dir, "state.db")}
 	if len(p.Socket) >= 104 {
 		return Paths{}, fmt.Errorf("socket path too long; use a shorter --state-dir or agent name")
 	}

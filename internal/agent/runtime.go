@@ -39,6 +39,19 @@ func (r *Runtime) ProviderName() string { return r.provider.Name() }
 // Run keeps mutable conversation state local to this turn. The daemon owns
 // admission, event identity/sequence, the overall deadline and failure events.
 func (r *Runtime) Run(ctx context.Context, req protocol.ChatRequest, emit func(protocol.Event) error) error {
+	return r.RunRecorded(ctx, req, emit, nil)
+}
+
+// RunRecorded reports complete structured messages before later tool actions.
+// The recorder is synchronous; a storage failure aborts further execution.
+func (r *Runtime) RunRecorded(ctx context.Context, req protocol.ChatRequest, emit func(protocol.Event) error, record func(llm.Message) error) error {
+	save := func(message llm.Message) error {
+		if record != nil {
+			return record(message)
+		}
+		return nil
+	}
+
 	send := func(event protocol.Event) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -97,6 +110,9 @@ func (r *Runtime) Run(ctx context.Context, req protocol.ChatRequest, emit func(p
 			if strings.TrimSpace(message.Content) == "" {
 				return &llm.Error{Code: "provider_incomplete_response"}
 			}
+			if err := save(message); err != nil {
+				return err
+			}
 			return send(protocol.Event{Type: protocol.Completed, Round: round})
 		}
 		// Validate the entire batch before executing any tool.
@@ -112,6 +128,9 @@ func (r *Runtime) Run(ctx context.Context, req protocol.ChatRequest, emit func(p
 		if round == MaxRounds {
 			return &llm.Error{Code: "round_limit"}
 		}
+		if err := save(message); err != nil {
+			return err
+		}
 		messages = append(messages, message)
 		for _, call := range message.ToolCalls {
 			if err := send(protocol.Event{Type: protocol.ToolStarted, Round: round, ToolCallID: call.ID, ToolName: call.Name}); err != nil {
@@ -125,7 +144,11 @@ func (r *Runtime) Run(ctx context.Context, req protocol.ChatRequest, emit func(p
 				return fmt.Errorf("tool execution: %w", err)
 			}
 			executions++
-			messages = append(messages, llm.Message{Role: "tool", ToolCallID: call.ID, Content: tool.WireContent(result)})
+			observation := llm.Message{Role: "tool", ToolCallID: call.ID, Content: tool.WireContent(result)}
+			if err := save(observation); err != nil {
+				return err
+			}
+			messages = append(messages, observation)
 			status := "ok"
 			if result.IsError {
 				status = "error"
