@@ -47,7 +47,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) (runErr erro
 		_, err := fmt.Fprintln(out, `ROSETTA — 具名 Agent / 后台 Daemon / ReAct 工具循环
 
 用法（省略 agent 时使用 personal）：
-  rosetta start  [agent] [--state-dir DIR] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512]
+  rosetta start  [agent] [--state-dir DIR] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512] [--workspace DIR]
   rosetta serve  [agent] [同 start 参数]   前台运行，Ctrl+C 停止
   rosetta status [agent] [--state-dir DIR]
   rosetta stop   [agent] [--state-dir DIR]
@@ -58,8 +58,10 @@ Agent 名称放在选项之前，允许 1–32 位 ASCII 字母/数字/_/-。
 agent.json 保存非敏感配置；显式启动参数只覆盖本次运行，不写回文件。
 DeepSeek 从启动环境的 DEEPSEEK_API_KEY 读取密钥，默认 mock 不联网。
 start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
-内置 get_time；mock 下发送 -m /time 可离线观察两轮工具调用。
-当前没有跨请求历史、用户命名空间或会话数据库。`)
+内置 get_time、list_files、read_files、阻塞式 subagent。
+mock 演示：/time、/ls [目录]、/read 文件、/delegate 任务。
+子 Agent 共用文件工具的工作目录，每轮父请求最多两个，不支持递归。
+当前没有跨请求历史、用户命名空间、会话数据库或子任务持久化。`)
 		return err
 	}
 	command := args[0]
@@ -80,10 +82,11 @@ start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
 	stateDir := flags.String("state-dir", filepath.Join(homeDir, ".rosetta"), "private state directory")
 	var message, session string
 	var rawJSON bool
-	var providerName, model string
+	var providerName, model, workspace string
 	var maxTokens int
 	var readyFD int
 	if command == "serve" || command == "start" {
+		flags.StringVar(&workspace, "workspace", "", "read-only workspace directory (default: agent workspace)")
 		flags.StringVar(&providerName, "provider", "mock", "model backend: mock or deepseek")
 		flags.StringVar(&model, "model", provider.DefaultDeepSeekModel, "DeepSeek model ID")
 		flags.IntVar(&maxTokens, "max-tokens", 512, "maximum output tokens per request (1-4096)")
@@ -135,6 +138,8 @@ start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
 		}
 		flags.Visit(func(f *flag.Flag) {
 			switch f.Name {
+			case "workspace":
+				cfg.Workspace = workspace
 			case "provider":
 				cfg.Provider = providerName
 			case "model":
@@ -143,6 +148,16 @@ start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
 				cfg.MaxTokens = maxTokens
 			}
 		})
+		if workspace != "" {
+			cfg.Workspace, err = filepath.Abs(workspace)
+			if err != nil {
+				return err
+			}
+		} else if cfg.Workspace == "" {
+			cfg.Workspace = paths.Workspace
+		} else if !filepath.IsAbs(cfg.Workspace) {
+			return fmt.Errorf("workspace in agent.json must be an absolute path")
+		}
 		if cfg.Provider != "mock" && cfg.Provider != "deepseek" {
 			return fmt.Errorf("provider must be mock or deepseek")
 		}
@@ -159,7 +174,7 @@ start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
 			if err := paths.InitConfig(defaults); err != nil {
 				return err
 			}
-			childArgs := []string{"serve", name, "--state-dir", paths.Root, "--provider", cfg.Provider, "--model", cfg.Model, "--max-tokens", strconv.Itoa(cfg.MaxTokens)}
+			childArgs := []string{"serve", name, "--state-dir", paths.Root, "--provider", cfg.Provider, "--model", cfg.Model, "--max-tokens", strconv.Itoa(cfg.MaxTokens), "--workspace", cfg.Workspace}
 			health, existing, err := daemon.Start(ctx, paths, childArgs)
 			if err != nil {
 				return err
@@ -188,11 +203,15 @@ start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
 		if err := paths.InitConfig(defaults); err != nil {
 			return err
 		}
-		tools, err := tool.NewRegistry(tool.Time{})
+		files, err := tool.OpenWorkspace(cfg.Workspace)
 		if err != nil {
 			return err
 		}
-		runtime := agent.New(backend, tools)
+		defer files.Close()
+		runtime, err := agent.NewWithSubagents(backend, tool.Time{}, tool.ReadFiles{Workspace: files}, tool.ListFiles{Workspace: files})
+		if err != nil {
+			return err
+		}
 		var ready func(protocol.Health) error
 		if readyPipe != nil {
 			ready = func(health protocol.Health) error {

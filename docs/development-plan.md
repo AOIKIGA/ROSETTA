@@ -1,5 +1,17 @@
 # 开发路线与协作方式
 
+> 2026-10-24 当前实现：文件工具与阻塞式子 Agent 已落地，见 [第六课](learning/06-file-tools-and-subagents.md)。会话数据库仍未实现。
+
+## 2026-10-24：只读工具与子任务
+
+- 新增 list_files/read_files，固定 workspace 边界、大小限制、逐文件错误与完整 JSON 截断。
+- start/serve 增加 --workspace，配置支持可选的绝对 workspace 路径，旧配置兼容。
+- 新增 task.Manager 的 Start/Status/Wait；subagent 工具先固定 Start 后立即 Wait，子 Runtime 仅有时间和文件工具。
+- 每父 turn 独立任务管理器；最多两个子任务，每个最多三轮模型/四次工具，子任务最长一分钟，整体仍为两分钟。
+- 子任务只有显式任务说明，不继承父消息；仅最终结果进入父模型，取消时等待子任务退出。
+- 验证使用 mock 和本地服务，覆盖目录越界、特殊文件、结构化输出、任务隔离/等待/取消/预算、真实 CLI 通过子 Agent 读文件。
+- 还未实现跨 turn 任务查询、CLI 子任务 status/wait、异步执行、子任务持久化或会话数据库。
+
 > 2026-10-22 当前实现：阶段 A 已加入具名 Agent、后台 start/status/stop、独立目录与持久化 agent.json。当前课程见 [第五课](learning/05-agent-daemon-lifecycle.md)。用户参数、SQLite 会话与跨 turn 历史属于后续 B/C 阶段。
 
 ## 2026-10-22：阶段 A，Agent 与后台进程

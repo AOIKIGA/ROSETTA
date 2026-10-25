@@ -35,6 +35,13 @@ func TestDetachedLifecycle(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, output)
 	}
 	root := filepath.Join(dir, "state")
+	workspace := filepath.Join(dir, "files")
+	if err := os.Mkdir(workspace, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "note.txt"), []byte("workspace-sentinel\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	invoke := func(args ...string) ([]byte, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -68,7 +75,7 @@ func TestDetachedLifecycle(t *testing.T) {
 	// without its child keeping the output pipe or terminal process group alive.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	starter := exec.CommandContext(ctx, binary, "start", "--state-dir", root)
+	starter := exec.CommandContext(ctx, binary, "start", "--state-dir", root, "--workspace", workspace)
 	starter.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if output, err := starter.CombinedOutput(); err != nil {
 		t.Fatalf("start: %v %s", err, output)
@@ -102,6 +109,36 @@ func TestDetachedLifecycle(t *testing.T) {
 	}
 	if output := string(must("chat", "personal", "-m", "/time", "--json")); !strings.Contains(output, `"type":"tool.finished"`) || !strings.Contains(output, `"type":"turn.completed"`) {
 		t.Fatal(output)
+	}
+	for _, prompt := range []string{"/ls", "/read note.txt", "/delegate /read note.txt"} {
+		output := must("chat", "personal", "--json", "-m", prompt)
+		var text strings.Builder
+		starts, completed := 0, 0
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			var event protocol.Event
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				t.Fatalf("invalid JSON event: %v", err)
+			}
+			if event.Type == protocol.TextDelta {
+				text.WriteString(event.Text)
+			}
+			if event.Type == protocol.Started {
+				starts++
+			}
+			if event.Type == protocol.Completed {
+				completed++
+			}
+		}
+		want := "workspace-sentinel"
+		if prompt == "/ls" {
+			want = "note.txt"
+		}
+		if !strings.Contains(text.String(), want) || starts != 1 || completed != 1 {
+			t.Fatalf("%s: %q, starts=%d completed=%d", prompt, text.String(), starts, completed)
+		}
+		if strings.HasPrefix(prompt, "/delegate") && !strings.Contains(text.String(), "task_id=") {
+			t.Fatal("missing task identity")
+		}
 	}
 	chatCtx, cancelChat := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelChat()

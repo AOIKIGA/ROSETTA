@@ -2,9 +2,9 @@
 
 用 Go 开发的个人本地 Agent 项目，同时记录架构决策和学习过程。参考 Agentix 的职责划分，按个人维护成本重新设计。
 
-> 当前阶段（2026-10-22）：具名 Agent 与后台 daemon。先读 [从前台 Server 到后台 Daemon](docs/learning/05-agent-daemon-lifecycle.md)，ReAct 循环见 [第四课](docs/learning/04-react-loop.md)。
+> 当前阶段（2026-10-24）：只读文件工具与阻塞式子 Agent。先读 [文件工具与子 Agent](docs/learning/06-file-tools-and-subagents.md)，后台进程见 [第五课](docs/learning/05-agent-daemon-lifecycle.md)。
 
-支持 DeepSeek 结构化工具调用与离线 mock，内置 `get_time`。每个 Agent 有独立进程、配置、socket 和日志。**现在持久化的是 Agent 配置；尚无用户命名空间、会话数据库、跨请求历史或文件/命令工具。** `--session` 仍只用于该 Agent 内的并发准入。
+支持 DeepSeek 结构化工具调用与离线 mock，内置 `get_time`、`list_files`、`read_files` 和 `subagent`。每个 Agent 有独立进程、配置、socket 和日志。**现在持久化的是 Agent 配置；尚无用户命名空间、会话数据库、跨请求历史、写文件或命令执行工具。** `--session` 仍只用于该 Agent 内的并发准入。
 
 ## 编译与后台运行
 
@@ -34,6 +34,26 @@ Agent 名称放在选项之前，允许 1–32 位 ASCII 字母、数字、下�
 ```
 
 普通 mock 消息保留模拟回复；`/time` 是离线演示触发词，会走“请求工具 → 执行真实本地 get_time → 交回 Mock → 输出回答”两轮流程。Mock 不调用 AI。进度写 stderr、回答写 stdout；`--json` 将全部事件写为 NDJSON。
+
+## 文件工具与子 Agent
+
+文件工具默认读取 `<state-dir>/agents/<agent>/workspace/`，不会默认读取整个 state dir。也可以指定已有目录：
+
+```sh
+./bin/rosetta stop personal
+./bin/rosetta start personal --workspace /Users/aoki/Documents/ROSETTA
+./bin/rosetta chat personal -m /ls
+./bin/rosetta chat personal -m '/read go.mod'
+./bin/rosetta chat personal -m '/delegate /read go.mod'
+```
+
+以上是 mock 离线演示，文件读取和子 Runtime 实际执行，但不会调用 AI。DeepSeek 模式用自然语言提出任务，模型自行选择工具。文件内容作为上下文交给模型；请选择希望助手读取的目录。
+
+`--workspace` 仅覆盖本次运行。要保存默认值，可在 agent.json 中增加绝对路径字段 `workspace`；旧配置不必修改，仍使用 Agent 自己的 workspace。显式相对路径按启动终端所在目录解析，再传给后台进程。
+
+read_files 最多读取四个 UTF-8 普通文件，每个文件最多 1 MiB，支持指定起始行和行数。目录越界、外部符号链接、特殊文件会被拒绝；输出超过限制时标注截断。list_files 不递归，最多 100 项，暂不支持翻页。工具不会写文件或执行 shell。
+
+subagent 工具会启动子任务并等待完成，再把结果交回父模型。子 Agent 只有时间和文件工具，不能继续委派；它没有父会话历史，也不会把中间文字混入父回答。内部已实现 Start/Status/Wait，**尚未开放子任务 CLI status/wait 命令或异步后台任务**；任务记录随父 turn 结束释放。
 
 ## DeepSeek 与配置
 
@@ -73,20 +93,22 @@ export DEEPSEEK_API_KEY
 │   ├── daemon.sock     # 本地 HTTP 通信
 │   ├── daemon.lock     # 生命周期独占锁，停止后保留文件
 │   └── instance.json   # 当前 PID、实例 ID、启动时间；停止时移除
-└── logs/
-    └── daemon.log      # 后台诊断日志，停止后保留
+├── logs/
+│   └── daemon.log      # 后台诊断日志，停止后保留
+└── workspace/         # 默认只读文件工作目录
 ```
 
 每条命令可传同一个 `--state-dir /短路径/私有目录`，该参数始终代表最外层根目录。目录要求私有权限，配置、锁、实例与日志文件使用 0600。拒绝 Agent 路径穿越、管理目录/文件的符号链接及过长 socket 路径。status/stop 不会创建不存在的 Agent。
 
 状态查询结合真实进程锁与 socket；不把 PID 文件当作存活依据。stop 通过 socket 指定实例 ID，不会根据过期 PID 杀进程。服务无响应时明确报错，当前没有 force-stop。崩溃后下一次 start 可以清理残留 socket，但不会自动重启。也未实现开机自启、日志轮转或后台 turn 恢复；日志可在停止服务后手动归档。
 
-每个 Agent 最多同时运行 4 个 turn，同一 session 一次只能运行一个。每个 turn 最多 6 次模型调用、8 次工具调用，每轮最多 4 个工具；整体超时 2 分钟，单工具 3 秒，工具结果最多 8 KiB，模型输入 JSON 最多 64 KiB。
+每个 Agent 最多同时运行 4 个 turn，同一 session 一次只能运行一个。父 Runtime 最多 6 次模型调用、8 次工具调用；最多委派两个子任务，每个子任务最多 3 次模型调用、4 次工具调用。父子合计最多 12 次模型调用、16 次工具调用。整体超时仍为 2 分钟，包含子任务时间；普通工具 3 秒，subagent 工具 60 秒。工具结果最多 8 KiB，模型输入 JSON 最多 64 KiB。
 
 本地协议升级为 v3。**升级前如有旧版 `<state-dir>/daemon.sock` 服务，请在旧 serve 终端按 Ctrl+C 停止。** 新版使用 Agent 子目录，不接管或删除旧服务，也不迁移旧布局。旧版没有会话数据库，无消息历史可迁移。status 的 ready 只说明本地服务就绪，不验证远端鉴权和余额。
 
 ## 阅读与验证
 
+- [文件工具与子 Agent](docs/learning/06-file-tools-and-subagents.md)：工作目录、读取限制、父子任务和预留接口。
 - [后台 Daemon 与 Agent 目录](docs/learning/05-agent-daemon-lifecycle.md)：本轮修改、流程和源码阅读顺序。
 - [ReAct 工具循环](docs/learning/04-react-loop.md)：模型与工具调用。
 - [开发路线](docs/development-plan.md)：当前进度与下一阶段。
@@ -108,7 +130,8 @@ internal/protocol/   本地请求、事件、健康状态和关闭请求
 internal/agent/      单个 turn 内的 ReAct 循环
 internal/llm/        供应商中立的模型类型
 internal/provider/   DeepSeek 适配器与 Mock
-internal/tool/       工具注册表与 get_time
+internal/tool/       工具注册表、时间、只读文件与子 Agent 工具
+internal/task/       父 turn 内的子任务创建、状态查询与等待
 ```
 
 `module rosetta` 为当前模块名；仓库为 AOIKIGA/ROSETTA，尚未配置自动发布。

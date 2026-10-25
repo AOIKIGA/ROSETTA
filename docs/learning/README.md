@@ -2,9 +2,9 @@
 
 当前项目方向：通用个人助手。2026-10-20 起进入小步实现阶段，保留 Daemon / Runtime 边界。
 
-2026-10-22 当前实现：[从单次回答到 ReAct 工具循环](04-react-loop.md)。先用 mock 的 `/time` 跑通真实本地工具，再观察 DeepSeek 工具请求。配套 [设计说明](../design/react-loop.md) 记录职责、消息配对和停止条件。
+2026-10-22 的工具循环课程：[从单次回答到 ReAct 工具循环](04-react-loop.md)。先用 mock 的 `/time` 跑通真实本地工具，再观察 DeepSeek 工具请求。配套 [设计说明](../design/react-loop.md) 记录职责、消息配对和停止条件。
 
-当前实现入口为 [第五课：后台 Daemon 与 Agent 目录](05-agent-daemon-lifecycle.md)，已实现具名 Agent、后台启停和配置落盘；会话数据库仍待实现。第四课讲解沿用的 ReAct 循环；[Daemon / Runtime 与第一次 DeepSeek 问答](03-daemon-runtime-deepseek.md) 是上一版本的基础链路。下面的长讲义仍可用作参考，其中完整配置设计尚未实现。
+当前实现入口为 [第六课：文件工具与子 Agent](06-file-tools-and-subagents.md)。[第五课：后台 Daemon 与 Agent 目录](05-agent-daemon-lifecycle.md) 讲解已经实现的具名 Agent、后台启停和配置落盘；会话数据库仍待实现。第四课讲解沿用的 ReAct 循环；[Daemon / Runtime 与第一次 DeepSeek 问答](03-daemon-runtime-deepseek.md) 是上一版本的基础链路。下面的长讲义仍可用作参考，其中完整配置设计尚未实现。
 
 ## 当前主课
 
