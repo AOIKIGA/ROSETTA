@@ -2,11 +2,11 @@
 
 用 Go 开发的个人本地 Agent 项目，同时记录架构决策和学习过程。参考 Agentix 的职责划分，按个人维护成本重新设计。
 
-> 当前阶段（2026-10-26）：B，SQLite、用户与会话、历史查询。先读 [存储与身份](docs/learning/07-storage-and-identity.md)，后台进程基础见 [第五课](docs/learning/05-agent-daemon-lifecycle.md)。
+> 当前阶段（2026-10-29）：C，加载会话历史与限制上下文大小。先读 [让助手记住前面的对话](docs/learning/08-session-context.md)，存储基础见 [第七课](docs/learning/07-storage-and-identity.md)。
 
-支持 DeepSeek 结构化工具调用与离线 mock，内置 `get_time`。每个 Agent 有独立进程、配置、socket、日志和 SQLite 数据库。会话按 Agent → 用户 → 会话名称划分，保存消息、工具调用及运行状态。**当前能查询历史，但还不会把历史送入下一次模型调用；跨轮记忆属于阶段 C。**
+支持 DeepSeek 结构化工具调用与离线 mock，内置 `get_time`。每个 Agent 有独立进程、配置、socket、日志和 SQLite 数据库。会话按 Agent → 用户 → 会话名称划分，保存消息、工具调用及运行状态。**后续请求会加载同一用户、同一会话近期已完成的对话，重启后也有效。** 历史受条数和字节预算限制，目前没有摘要或长期记忆。
 
-文件工具与子 Agent 工作已单独保存在 `codex/file-tools-subagents`（`f99b7da`）；本分支 `codex/storage-identity` 从阶段 A 开始实现 B。
+文件工具与子 Agent 工作已单独保存在 `codex/file-tools-subagents`（`f99b7da`）；B 已提交在 `codex/storage-identity`（`7e89f76`）。这两个分支已推送远端；当前 `codex/session-context` 从 B 开始实现 C，尚未合并文件工具与子 Agent。
 
 ## 编译与后台运行
 
@@ -53,6 +53,25 @@ Agent 名称放在选项之前，允许 1–32 位 ASCII 字母、数字、下�
 历史查询通过 daemon 执行，需要先启动对应 Agent。`sessions list` 列出所选用户的会话；`sessions show` 按消息写入顺序展示用户输入、完整模型消息、工具参数与结果、所属运行的状态。默认最多 20 条，可用 `--limit 1..100` 调整；如果返回 `next_after` 或“下一页”，保留原用户/会话参数并添加 `--after CURSOR`。list 的游标是会话 ID，show 的游标是消息 ID，不能混用。单页历史最大 2 MiB，因此实际条数也可能受字节上限限制。
 
 `--json` 对 chat 输出 NDJSON 事件流，对历史查询输出一个 JSON 对象。所有命令都支持 `--state-dir`。本次未提供独立创建、重命名或删除用户/会话的命令。
+
+## 会话记忆（阶段 C）
+
+重新编译后，先停止旧 daemon 再启动，正在运行的进程不会自动换成新代码。下面用 mock 验证整个存储与上下文链路：
+
+```sh
+./bin/rosetta stop personal
+./bin/rosetta start personal --provider mock
+./bin/rosetta chat personal --user alice --session memory -m "我喜欢 Go"
+./bin/rosetta stop personal
+./bin/rosetta start personal --provider mock
+./bin/rosetta chat personal --user alice --session memory -m /recall
+```
+
+最后会显示“上一条用户消息：我喜欢 Go”。`/recall` 是 mock 演示口令，直接检查传入的上下文，不调用 AI，也不模拟自然语言理解。最多显示上一条消息的前 256 个字符；该命令本身也会成为新的聊天记录。
+
+历史加载策略：从最近的成功 turn 往前取，最多 20 次、累计消息 JSON 最多 32 KiB，再按时间顺序交给模型。遇到放不下的 turn 就停止向更早处查找；不会只保留它的部分消息。failed/canceled/interrupted/running 不参与模型上下文，但仍可用 sessions show 查询。切换 provider/model 后，同一会话仍沿用这些历史；需要空白对话时换一个 session 名称。
+
+每轮模型调用都会检查系统提示、历史、当前请求、工具定义和本次工具结果的总大小（最多 64 KiB），DeepSeek 还会计入实际 API 请求的包装字段。超出时逐次移除最旧的完整历史 turn；本次输入和本次工具结果不会被截断，单靠它们就超限时返回 input_limit。裁剪只作用于模型输入，不删除数据库记录。这里是 JSON 字节限制，不是模型 token 计数。
 
 ## DeepSeek 与配置
 
@@ -111,7 +130,8 @@ export DEEPSEEK_API_KEY
 
 ## 阅读与验证
 
-- [存储与身份](docs/learning/07-storage-and-identity.md)：本轮实现、数据库关系和可运行练习。
+- [让助手记住前面的对话](docs/learning/08-session-context.md)：历史筛选、完整工具消息与上下文预算。
+- [存储与身份](docs/learning/07-storage-and-identity.md)：阶段 B 的数据库关系和可运行练习。
 - [后台 Daemon 与 Agent 目录](docs/learning/05-agent-daemon-lifecycle.md)：本轮修改、流程和源码阅读顺序。
 - [ReAct 工具循环](docs/learning/04-react-loop.md)：模型与工具调用。
 - [开发路线](docs/development-plan.md)：当前进度与下一阶段。
@@ -122,7 +142,7 @@ export DEEPSEEK_API_KEY
 make check
 ```
 
-执行 vet 与 race tests；进程集成测试会构建真实 CLI，在临时目录启动 mock daemon，验证终端进程组隔离、聊天取消、双 Agent、并发 start、缺密钥启动失败、停止和崩溃恢复，以及用户/会话/Agent 隔离、重启后历史保留，最后清理临时进程与目录。存储测试还验证完成提交、取消记录、中断标记和分页；不调用真实模型。
+执行 vet 与 race tests；进程集成测试会构建真实 CLI，在临时目录启动 mock daemon，验证终端进程组隔离、聊天取消、双 Agent、并发 start、缺密钥启动失败、停止和崩溃恢复，以及用户/会话/Agent 隔离、重启后历史保留，最后清理临时进程与目录。还通过重启后的 /recall 验证模型输入中的历史隔离。测试覆盖失败轮次排除、工具配对、整轮裁剪和实际请求体预算；不调用真实模型。
 
 ```text
 cmd/rosetta/          CLI 参数、配置覆盖和组件组装
@@ -132,7 +152,7 @@ internal/client/     CLI 侧 HTTP over Unix socket 客户端
 internal/protocol/   本地请求、事件、健康状态和关闭请求
 internal/identity/   用户与会话名称、默认值
 internal/store/      SQLite 初始化、事务、历史查询
-internal/conversation/ 连接消息记录与 Runtime，协调完成提交
+internal/conversation/ 加载当前会话历史，连接 Runtime 与消息记录、完成提交
 internal/agent/      单个 turn 内的 ReAct 循环
 internal/llm/        供应商中立的模型类型
 internal/provider/   DeepSeek 适配器与 Mock

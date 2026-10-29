@@ -3,7 +3,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -45,6 +44,11 @@ func (r *Runtime) Run(ctx context.Context, req protocol.ChatRequest, emit func(p
 // RunRecorded reports complete structured messages before later tool actions.
 // The recorder is synchronous; a storage failure aborts further execution.
 func (r *Runtime) RunRecorded(ctx context.Context, req protocol.ChatRequest, emit func(protocol.Event) error, record func(llm.Message) error) error {
+	return r.RunWithHistory(ctx, req, nil, emit, record)
+}
+
+// RunWithHistory consumes complete past turns; it never loads or rewrites storage.
+func (r *Runtime) RunWithHistory(ctx context.Context, req protocol.ChatRequest, history []llm.HistoryTurn, emit func(protocol.Event) error, record func(llm.Message) error) error {
 	save := func(message llm.Message) error {
 		if record != nil {
 			return record(message)
@@ -61,19 +65,23 @@ func (r *Runtime) RunRecorded(ctx context.Context, req protocol.ChatRequest, emi
 	if err := send(protocol.Event{Type: protocol.Started}); err != nil {
 		return err
 	}
-	messages := []llm.Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: req.Message},
+	for _, turn := range history {
+		if !llm.ValidHistoryTurn(turn) {
+			return &llm.Error{Code: "invalid_history"}
+		}
 	}
+	// Current-turn messages are kept separate, so trimming cannot remove the
+	// current user input or split a newly executed tool exchange.
+	messages := []llm.Message{{Role: "user", Content: req.Message}}
 	specs := r.tools.Specs()
 	seenCalls := make(map[string]bool)
 	executions := 0
 	for round := 1; round <= MaxRounds; round++ {
-		input := llm.Request{Messages: messages, Tools: specs}
-		encoded, err := json.Marshal(input)
-		if err != nil || len(encoded) > MaxInputBytes {
-			return &llm.Error{Code: "input_limit"}
+		input, remaining, err := r.prepareInput(history, messages, specs)
+		if err != nil {
+			return err
 		}
+		history = remaining
 		if err := send(protocol.Event{Type: protocol.RoundStarted, Round: round}); err != nil {
 			return err
 		}

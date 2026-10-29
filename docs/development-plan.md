@@ -1,6 +1,17 @@
 # 开发路线与协作方式
 
-> 2026-10-26 当前实现：阶段 B 已加入 SQLite、用户/会话归属、消息记录与历史查询。当前课程见 [存储与身份](learning/07-storage-and-identity.md)。阶段 C 再实现加载历史与上下文预算。
+> 2026-10-29 当前实现：阶段 C，会话历史参与模型输入，按完整 turn 控制上下文预算。课程见 [第八课](learning/08-session-context.md)。
+
+## 2026-10-29：阶段 C，会话上下文
+
+- B（7e89f76）与文件工具/子 Agent（f99b7da）分别推送到远端分支。C 在 `codex/session-context` 从 B 开发，不合并子 Agent 分支。
+- Store.LoadContext 以数据库中的当前 turn 为边界，只读同一 session 更早的 completed；最近最多 20 次、消息 JSON 累计 32 KiB，按时间顺序送入 Runtime。数据库 schema 仍为 1，不需要迁移。
+- Conversation 在 turn.started 后有界读取历史；失败时记录 storage_error，不静默丢掉历史继续请求模型。
+- 校验完整 user/assistant/tool 消息结构及工具请求和结果配对，禁止把存储的 system 消息作为历史。工具历史只作为输入，不重新执行。
+- Runtime 每轮组合 system + 历史 + 本次消息。超过 64 KiB 时先移除最旧的完整历史，保留本次输入和工具交换；仍超限则停止。DeepSeek 提供真实请求体大小计算，不额外调用模型。
+- mock 新增 /recall，通过真实 CLI 验证重启后记忆、用户/会话/Agent 隔离。当前不增加摘要、向量检索、自动续跑或新的配置项；历史不会无限增长到模型输入里。
+- 本地 HTTP 协议沿用 v4。升级仍须重启 daemon，旧 B 进程不会因替换二进制自动获得记忆。
+- 验证通过：`make check`（vet + 全量 race tests），含真实 CLI 重启后 /recall 与身份隔离；本机 `make build`、CGO 关闭的 Linux amd64 交叉编译通过。Linux 未运行验证，未调用真实模型。
 
 ## 2026-10-26：阶段 B，存储与身份
 

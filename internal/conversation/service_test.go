@@ -30,14 +30,19 @@ func setup(t *testing.T) (*store.Store, identity.Scope) {
 	return db, identity.Scope{User: "alice", Session: "main"}
 }
 
-func TestCompletionIsCommittedBeforeNotificationWithoutLoadingHistory(t *testing.T) {
+func TestCompletionIsCommittedBeforeNotificationWithSessionHistory(t *testing.T) {
 	db, scope := setup(t)
 	ctx := context.Background()
+	calls := 0
 	provider := providerFunc(func(ctx context.Context, req llm.Request, emit func(string) error) (llm.Response, error) {
-		if len(req.Messages) != 2 {
-			t.Fatal("stage B unexpectedly loaded history")
+		calls++
+		if len(req.Messages) != calls*2 {
+			t.Fatalf("missing history or duplicate current input: %+v", req.Messages)
 		}
-		text := "answer to " + req.Messages[1].Content
+		if calls == 2 && (req.Messages[1].Content != "first" || req.Messages[2].Content != "answer to first") {
+			t.Fatal("history not in chronological order")
+		}
+		text := "answer to " + req.Messages[len(req.Messages)-1].Content
 		if err := emit(text); err != nil {
 			return llm.Response{}, err
 		}
@@ -118,6 +123,37 @@ func TestCanceledRequestAndCompletionDeliveryFailure(t *testing.T) {
 }
 
 type failingCommit struct{ *store.Store }
+
+type failingLoad struct{ *store.Store }
+
+func (f failingLoad) LoadContext(context.Context, string) ([]llm.HistoryTurn, error) {
+	return nil, errors.New("private database failure")
+}
+
+func TestHistoryReadFailureIsRecordedWithoutCallingModel(t *testing.T) {
+	db, scope := setup(t)
+	ctx := context.Background()
+	turn, err := db.BeginTurn(ctx, scope, "read-failure", "hello", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := providerFunc(func(context.Context, llm.Request, func(string) error) (llm.Response, error) {
+		t.Fatal("model called without required history")
+		return llm.Response{}, nil
+	})
+	var events []protocol.Event
+	err = (Service{Runtime: agent.New(p, nil), Store: failingLoad{db}}).Run(ctx, turn, protocol.ChatRequest{Message: "hello"}, func(e protocol.Event) error {
+		events = append(events, e)
+		return nil
+	})
+	if err == nil || err.Error() != "storage_error" || len(events) != 1 || events[0].Type != protocol.Started {
+		t.Fatalf("events=%+v err=%v", events, err)
+	}
+	page, err := db.History(ctx, scope, 0, 20)
+	if err != nil || len(page.Messages) != 1 || page.Messages[0].Turn.Status != "failed" || page.Messages[0].Turn.Error != "storage_error" {
+		t.Fatalf("%+v %v", page, err)
+	}
+}
 
 func (f failingCommit) FinishTurn(ctx context.Context, id, status, code string, final *llm.Message) error {
 	if status == "completed" {

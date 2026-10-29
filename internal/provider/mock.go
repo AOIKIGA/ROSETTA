@@ -18,7 +18,7 @@ type Mock struct {
 
 func (Mock) Name() string { return "mock" }
 
-// The /time trigger makes the tool loop reproducible offline. Ordinary messages
+// /time and /recall exercise tools and supplied history offline. Ordinary messages
 // keep the original mock echo behavior. No conversation state lives on Mock.
 func (m Mock) Stream(ctx context.Context, req llm.Request, emit func(string) error) (llm.Response, error) {
 	if err := ctx.Err(); err != nil {
@@ -34,6 +34,20 @@ func (m Mock) Stream(ctx context.Context, req llm.Request, emit func(string) err
 		}}}, nil
 	}
 	answer := "[模拟模型：未调用 AI] 已收到：" + last.Content
+	if last.Role == "user" && strings.TrimSpace(last.Content) == "/recall" {
+		answer = "[模拟模型：未调用 AI] 当前上下文没有更早的用户消息。"
+		for i := len(req.Messages) - 2; i >= 0; i-- {
+			if req.Messages[i].Role == "user" {
+				previous := []rune(req.Messages[i].Content)
+				preview := string(previous[:min(len(previous), 256)])
+				if len(previous) > 256 {
+					preview += "…"
+				}
+				answer = "[模拟模型：未调用 AI] 上一条用户消息：" + preview
+				break
+			}
+		}
+	}
 	if last.Role == "tool" {
 		var result tool.Result
 		if err := json.Unmarshal([]byte(last.Content), &result); err != nil {

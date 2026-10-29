@@ -211,6 +211,18 @@ func TestDetachedLifecycle(t *testing.T) {
 	if restartedHistory.Session.ID != aliceHistory.Session.ID || len(restartedHistory.Messages) != 2 {
 		t.Fatal("restart lost session history")
 	}
+	// The restarted daemon reconstructs model context from its SQLite database.
+	for _, tc := range []struct{ agent, user, session, want string }{
+		{"personal", "alice", "main", "上一条用户消息：alice-secret"},
+		{"personal", "bob", "main", "上一条用户消息：bob-secret"},
+		{"personal", "alice", "learning", "上一条用户消息：lesson"},
+		{"work", "alice", "main", "当前上下文没有更早的用户消息"},
+	} {
+		output := string(must("chat", tc.agent, "--user", tc.user, "--session", tc.session, "-m", "/recall"))
+		if !strings.Contains(output, tc.want) {
+			t.Fatalf("context isolation/restart for %+v: %s", tc, output)
+		}
+	}
 	if second.InstanceID == first.InstanceID {
 		t.Fatal("restart reused instance ID")
 	}

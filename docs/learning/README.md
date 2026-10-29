@@ -4,7 +4,9 @@
 
 2026-10-22 工具循环：[从单次回答到 ReAct 工具循环](04-react-loop.md)。先用 mock 的 `/time` 跑通真实本地工具，再观察 DeepSeek 工具请求。配套 [设计说明](../design/react-loop.md) 记录职责、消息配对和停止条件。
 
-2026-10-26 当前实现入口为 [存储与身份](07-storage-and-identity.md)，已加入 SQLite、用户/会话隔离与历史查询；历史尚不参与下一次模型输入。后台启停与目录基础见 [第五课](05-agent-daemon-lifecycle.md)。第六课编号留给独立分支上的文件工具与子 Agent 工作，当前可直接读第七课。第四课讲解沿用的 ReAct 循环；[Daemon / Runtime 与第一次 DeepSeek 问答](03-daemon-runtime-deepseek.md) 是上一版本的基础链路。下面的长讲义仍可用作参考，其中完整配置设计尚未实现。
+阶段 B 的入口为 [存储与身份](07-storage-and-identity.md)，介绍 SQLite、用户/会话隔离与历史查询。后台启停与目录基础见 [第五课](05-agent-daemon-lifecycle.md)。第六课编号留给独立分支上的文件工具与子 Agent 工作，当前可直接读第七课。第四课讲解沿用的 ReAct 循环；[Daemon / Runtime 与第一次 DeepSeek 问答](03-daemon-runtime-deepseek.md) 是上一版本的基础链路。下面的长讲义仍可用作参考，其中完整配置设计尚未实现。
+
+2026-10-29 当前实现入口：[第八课：让助手记住前面的对话](08-session-context.md)。阶段 C 已将近期成功对话加入模型上下文，包含完整工具消息，并按整次请求裁剪历史。
 
 ## 当前主课
 

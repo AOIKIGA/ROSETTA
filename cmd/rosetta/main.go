@@ -64,7 +64,8 @@ agent.json 保存非敏感配置；显式启动参数只覆盖本次运行，不
 DeepSeek 从启动环境的 DEEPSEEK_API_KEY 读取密钥，默认 mock 不联网。
 start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
 内置 get_time；mock 下发送 -m /time 可离线观察两轮工具调用。
-SQLite 保存各用户/会话的消息与运行状态；历史暂不自动送入下一轮模型。`)
+SQLite 保存各用户/会话的消息与运行状态；后续请求加载近期完整的成功对话。
+mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。`)
 		return err
 	}
 	command := args[0]

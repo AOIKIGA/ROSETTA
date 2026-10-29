@@ -44,6 +44,12 @@ type Provider interface {
 	Stream(ctx context.Context, req Request, onText func(string) error) (Response, error)
 }
 
+// InputSizer optionally measures an adapter's exact encoded request body.
+// It must be deterministic and must not perform network or model calls.
+type InputSizer interface {
+	InputSize(Request) (int, error)
+}
+
 // Error exposes only a controlled category to clients, never raw API bodies.
 type Error struct{ Code string }
 

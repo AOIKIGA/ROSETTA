@@ -1,5 +1,5 @@
 // Package conversation records a turn without coupling the model loop to SQL.
-// Stage B records history but deliberately does not load it into the next prompt.
+// Completed history is selected within the current persisted session.
 package conversation
 
 import (
@@ -19,6 +19,7 @@ var ErrDelivery = errors.New("completed turn could not be delivered")
 var codePattern = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 
 type Recorder interface {
+	LoadContext(context.Context, string) ([]llm.HistoryTurn, error)
 	AppendMessage(context.Context, string, llm.Message) error
 	FinishTurn(context.Context, string, string, string, *llm.Message) error
 }
@@ -31,24 +32,45 @@ type Service struct {
 func (s Service) Run(ctx context.Context, turn store.Turn, req protocol.ChatRequest, emit func(protocol.Event) error) error {
 	var final *llm.Message
 	committed := false
-	err := s.Runtime.RunRecorded(ctx, req, func(event protocol.Event) error {
-		if event.Type == protocol.Completed {
-			if err := s.Store.FinishTurn(ctx, turn.ID, "completed", "", final); err != nil {
+	// Send started before the bounded read, including when storage fails. The
+	// stream always starts with one started event and can then report failure.
+	err := emit(protocol.Event{Type: protocol.Started})
+	var history []llm.HistoryTurn
+	if err == nil {
+		loadCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		history, err = s.Store.LoadContext(loadCtx, turn.ID)
+		cancel()
+		if err != nil {
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			} else {
+				err = &llm.Error{Code: "storage_error"}
+			}
+		}
+	}
+	if err == nil {
+		err = s.Runtime.RunWithHistory(ctx, req, history, func(event protocol.Event) error {
+			if event.Type == protocol.Started {
+				return nil // Service already announced the turn before loading history.
+			}
+			if event.Type == protocol.Completed {
+				if err := s.Store.FinishTurn(ctx, turn.ID, "completed", "", final); err != nil {
+					return &llm.Error{Code: "storage_error"}
+				}
+				committed = true
+			}
+			return emit(event)
+		}, func(message llm.Message) error {
+			if message.Role == "assistant" && len(message.ToolCalls) == 0 {
+				final = &message
+				return nil
+			}
+			if err := s.Store.AppendMessage(ctx, turn.ID, message); err != nil {
 				return &llm.Error{Code: "storage_error"}
 			}
-			committed = true
-		}
-		return emit(event)
-	}, func(message llm.Message) error {
-		if message.Role == "assistant" && len(message.ToolCalls) == 0 {
-			final = &message
 			return nil
-		}
-		if err := s.Store.AppendMessage(ctx, turn.ID, message); err != nil {
-			return &llm.Error{Code: "storage_error"}
-		}
-		return nil
-	})
+		})
+	}
 	if committed {
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrDelivery, err)

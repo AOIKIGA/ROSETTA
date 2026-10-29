@@ -50,7 +50,7 @@ func NewDeepSeek(apiKey, model string, maxTokens int) (*DeepSeek, error) {
 
 func (*DeepSeek) Name() string { return "deepseek" }
 
-func (p *DeepSeek) Stream(ctx context.Context, input llm.Request, emit func(string) error) (llm.Response, error) {
+func (p *DeepSeek) encodeRequest(input llm.Request) ([]byte, error) {
 	messages := make([]apiMessage, 0, len(input.Messages))
 	for _, message := range input.Messages {
 		wire := apiMessage{Role: message.Role, Content: message.Content, ToolCallID: message.ToolCallID}
@@ -70,12 +70,24 @@ func (p *DeepSeek) Stream(ctx context.Context, input llm.Request, emit func(stri
 		"stream":   true, "max_tokens": p.maxTokens,
 		"thinking": map[string]string{"type": "disabled"},
 	})
+	return body, err
+}
+
+// InputSize measures the exact provider payload without issuing a request.
+func (p *DeepSeek) InputSize(input llm.Request) (int, error) {
+	body, err := p.encodeRequest(input)
+	return len(body), err
+}
+
+func (p *DeepSeek) Stream(ctx context.Context, input llm.Request, emit func(string) error) (llm.Response, error) {
+	body, err := p.encodeRequest(input)
 	if err != nil {
 		return llm.Response{}, &PublicError{Code: "provider_request_error"}
 	}
 	if len(body) > llm.MaxInputBytes {
 		return llm.Response{}, &PublicError{Code: "input_limit"}
 	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return llm.Response{}, &PublicError{Code: "provider_request_error"}
