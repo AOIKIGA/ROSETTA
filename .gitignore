@@ -1,6 +1,7 @@
 .DS_Store
 /bin/
 /.rosetta/
+# Local credentials: keep real env files out of Git (including subdirectories).
 .env
 .env.*
 !.env.example

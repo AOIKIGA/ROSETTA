@@ -57,7 +57,7 @@ func TestDetachedLifecycle(t *testing.T) {
 		}
 		return h
 	}
-	for _, name := range []string{"personal", "work", "race", "broken"} {
+	for _, name := range []string{"personal", "work", "race", "broken", "envfile"} {
 		t.Cleanup(func() {
 			output, err := invoke("stop", name)
 			if err != nil {
@@ -187,6 +187,27 @@ func TestDetachedLifecycle(t *testing.T) {
 	if h := health("broken"); h.Status != "stopped" {
 		t.Fatalf("failed child left daemon: %+v", h)
 	}
+	// Resolve a relative credential file before the child changes directory.
+	// NewDeepSeek validates the key locally; no model request is made here.
+	if err := os.WriteFile(filepath.Join(dir, "credentials.env"), []byte("DEEPSEEK_API_KEY=detached-test-key\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	envCtx, envCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer envCancel()
+	envStart := exec.CommandContext(envCtx, binary, "start", "envfile", "--state-dir", root, "--provider", "deepseek", "--env-file", "credentials.env")
+	envStart.Dir = dir
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, "DEEPSEEK_API_KEY=") {
+			envStart.Env = append(envStart.Env, entry)
+		}
+	}
+	if output, err := envStart.CombinedOutput(); err != nil {
+		t.Fatalf("env file startup: %v %s", err, output)
+	}
+	if h := health("envfile"); h.Status != "ready" || h.Provider != "deepseek" {
+		t.Fatal("detached daemon did not load the credential file")
+	}
+	must("stop", "envfile")
 	// Persistent config is reused; explicit runtime overrides must not rewrite it.
 	configPath := filepath.Join(root, "agents", "personal", "agent.json")
 	configBefore, err := os.ReadFile(configPath)

@@ -48,7 +48,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) (runErr erro
 		_, err := fmt.Fprintln(out, `ROSETTA — 具名 Agent / 后台 Daemon / ReAct 工具循环
 
 用法（省略 agent 时使用 personal）：
-  rosetta start  [agent] [--state-dir DIR] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512]
+  rosetta start  [agent] [--state-dir DIR] [--env-file PATH] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512]
   rosetta serve  [agent] [同 start 参数]   前台运行，Ctrl+C 停止
   rosetta status [agent] [--state-dir DIR]
   rosetta stop   [agent] [--state-dir DIR]
@@ -61,7 +61,8 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) (runErr erro
 Agent 名称放在选项之前，允许 1–32 位 ASCII 字母/数字/_/-。
 默认根目录 ~/.rosetta；每个 Agent 存在 agents/<name>/ 下。
 agent.json 保存非敏感配置；显式启动参数只覆盖本次运行，不写回文件。
-DeepSeek 从启动环境的 DEEPSEEK_API_KEY 读取密钥，默认 mock 不联网。
+DeepSeek 优先读取环境变量 DEEPSEEK_API_KEY，否则读取启动目录的 .env；可用 --env-file 指定。
+默认 mock 不联网；更换密钥后需重启 daemon。
 start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
 内置 get_time；mock 下发送 -m /time 可离线观察两轮工具调用。
 SQLite 保存各用户/会话的消息与运行状态；后续请求加载近期完整的成功对话。
@@ -95,10 +96,11 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 	var message, session, user, after string
 	var limit int
 	var rawJSON bool
-	var providerName, model string
+	var providerName, model, envFile string
 	var maxTokens int
 	var readyFD int
 	if command == "serve" || command == "start" {
+		flags.StringVar(&envFile, "env-file", ".env", "optional credential file; empty path disables file loading")
 		flags.StringVar(&providerName, "provider", "mock", "model backend: mock or deepseek")
 		flags.StringVar(&model, "model", provider.DefaultDeepSeekModel, "DeepSeek model ID")
 		flags.IntVar(&maxTokens, "max-tokens", 512, "maximum output tokens per request (1-4096)")
@@ -162,6 +164,12 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 		return err
 	}
 	if command == "start" || command == "serve" {
+		if envFile != "" {
+			envFile, err = filepath.Abs(envFile)
+			if err != nil {
+				return fmt.Errorf("cannot resolve env file path")
+			}
+		}
 		defaults := state.Config{Version: 1, Agent: name, Provider: "mock", Model: provider.DefaultDeepSeekModel, MaxTokens: 512}
 		cfg, err := paths.LoadConfig(defaults)
 		if err != nil {
@@ -193,7 +201,7 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 			if err := paths.InitConfig(defaults); err != nil {
 				return err
 			}
-			childArgs := []string{"serve", name, "--state-dir", paths.Root, "--provider", cfg.Provider, "--model", cfg.Model, "--max-tokens", strconv.Itoa(cfg.MaxTokens)}
+			childArgs := []string{"serve", name, "--state-dir", paths.Root, "--provider", cfg.Provider, "--model", cfg.Model, "--max-tokens", strconv.Itoa(cfg.MaxTokens), "--env-file", envFile}
 			health, existing, err := daemon.Start(ctx, paths, childArgs)
 			if err != nil {
 				return err
@@ -211,7 +219,11 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 		case "mock":
 			backend = provider.Mock{Delay: 60 * time.Millisecond}
 		case "deepseek":
-			backend, err = provider.NewDeepSeek(os.Getenv("DEEPSEEK_API_KEY"), cfg.Model, cfg.MaxTokens)
+			key, keyErr := deepSeekKey(envFile)
+			if keyErr != nil {
+				return keyErr
+			}
+			backend, err = provider.NewDeepSeek(key, cfg.Model, cfg.MaxTokens)
 			if err != nil {
 				return err
 			}

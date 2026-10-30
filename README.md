@@ -75,18 +75,24 @@ Agent 名称放在选项之前，允许 1–32 位 ASCII 字母、数字、下�
 
 ## DeepSeek 与配置
 
-DeepSeek 从**启动服务时**的 `DEEPSEEK_API_KEY` 环境变量读取密钥，不自动读取 `.env`。在 zsh 中可以这样输入，输入不回显，也不会将密钥写入命令历史：
+DeepSeek 在 start/serve 启动时读取密钥，优先级为：**已有 `DEEPSEEK_API_KEY` 环境变量 → 启动目录的 `.env`**。已设置为空的环境变量也优先，会导致缺少密钥错误；要启用文件中的值，可先执行 `unset DEEPSEEK_API_KEY`。
 
-```zsh
-read -rs "DEEPSEEK_API_KEY?DeepSeek API Key: "
-printf '\n'
-export DEEPSEEK_API_KEY
-./bin/rosetta stop personal
-./bin/rosetta start personal --provider deepseek
-./bin/rosetta chat personal -m "请调用工具查询上海和 UTC 当前时间，并告诉我时差"
+本地 `.env` 格式如下（不要把真实密钥提交到 Git）：
+
+```dotenv
+DEEPSEEK_API_KEY=你的本地密钥
 ```
 
-后台进程继承启动环境。其他终端执行 chat/status/stop 不需要密钥；下次启动 DeepSeek 仍需提供环境变量。默认模型 `deepseek-flash`，可用 `--model` 指定；`--max-tokens` 默认 512，范围 1–4096，限制每次模型调用的输出。沿用非思考模式，不自动重试模型请求。
+`.gitignore` 已忽略 `.env` 和 `.env.*`，仅允许无真实密钥的 `.env.example` 模板。程序只读取 DEEPSEEK_API_KEY，支持空行、注释、可选 export 和单/双引号，不执行 shell 命令、不展开变量、不支持多行值。重复赋值取最后一条；文件最多 64 KiB。文件不存在时仍可只用环境变量。
+
+```sh
+./bin/rosetta stop personal
+./bin/rosetta start personal --provider deepseek
+```
+
+若不在项目目录启动，可显式使用 `--env-file /绝对路径/.env`；`--env-file ''` 禁用文件读取。start 将文件路径转换成绝对路径交给子进程，daemon 改变工作目录不会影响读取位置。修改密钥后需要 stop/start，重复 start 不重载。mock 模式不读取凭证文件。
+
+后台进程继承启动环境；文件中的密钥只交给模型适配器，不导入整个进程环境。其他终端执行 chat/status/stop 不需要密钥。默认模型 `deepseek-flash`，可用 `--model` 指定；`--max-tokens` 默认 512，范围 1–4096，限制每次模型调用的输出。沿用非思考模式，不自动重试模型请求。
 
 首次 start/serve 创建默认配置 `~/.rosetta/agents/personal/agent.json`：
 
