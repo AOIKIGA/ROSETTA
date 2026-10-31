@@ -16,7 +16,7 @@ const DefaultAgent = "personal"
 var agentPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,32}$`)
 
 type Paths struct {
-	Root, Agent, Dir, Run, Logs, Socket, Lock, Instance, Log, Config, Database string
+	Root, Agent, Dir, Run, Logs, Socket, Lock, Instance, Log, Config, Database, Workspace string
 }
 
 func Resolve(root, name string) (Paths, error) {
@@ -36,7 +36,7 @@ func Resolve(root, name string) (Paths, error) {
 	p := Paths{Root: abs, Agent: name, Dir: dir, Run: run, Logs: logs,
 		Socket: filepath.Join(run, "daemon.sock"), Lock: filepath.Join(run, "daemon.lock"),
 		Instance: filepath.Join(run, "instance.json"), Log: filepath.Join(logs, "daemon.log"),
-		Config: filepath.Join(dir, "agent.json"), Database: filepath.Join(dir, "state.db")}
+		Config: filepath.Join(dir, "agent.json"), Database: filepath.Join(dir, "state.db"), Workspace: filepath.Join(dir, "workspace")}
 	if len(p.Socket) >= 104 {
 		return Paths{}, fmt.Errorf("socket path too long; use a shorter --state-dir or agent name")
 	}
@@ -66,7 +66,7 @@ func (p Paths) Ensure() error {
 }
 
 func (p Paths) directories() []string {
-	return []string{p.Root, filepath.Join(p.Root, "agents"), p.Dir, p.Run, p.Logs}
+	return []string{p.Root, filepath.Join(p.Root, "agents"), p.Dir, p.Run, p.Logs, p.Workspace}
 }
 
 func checkDir(path string) error {
@@ -98,6 +98,7 @@ type Config struct {
 	Provider  string `json:"provider"`
 	Model     string `json:"model"`
 	MaxTokens int    `json:"max_tokens"`
+	Workspace string `json:"workspace,omitempty"`
 }
 
 // LoadConfig returns defaults when absent; only start/serve initialize the file.

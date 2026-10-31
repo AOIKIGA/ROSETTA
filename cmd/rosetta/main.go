@@ -48,7 +48,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) (runErr erro
 		_, err := fmt.Fprintln(out, `ROSETTA — 具名 Agent / 后台 Daemon / ReAct 工具循环
 
 用法（省略 agent 时使用 personal）：
-  rosetta start  [agent] [--state-dir DIR] [--env-file PATH] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512]
+  rosetta start  [agent] [--state-dir DIR] [--env-file PATH] [--workspace DIR] [--provider mock|deepseek] [--model MODEL] [--max-tokens 512]
   rosetta serve  [agent] [同 start 参数]   前台运行，Ctrl+C 停止
   rosetta status [agent] [--state-dir DIR]
   rosetta stop   [agent] [--state-dir DIR]
@@ -64,7 +64,8 @@ agent.json 保存非敏感配置；显式启动参数只覆盖本次运行，不
 DeepSeek 优先读取环境变量 DEEPSEEK_API_KEY，否则读取启动目录的 .env；可用 --env-file 指定。
 默认 mock 不联网；更换密钥后需重启 daemon。
 start 成功后可关闭终端；chat 的 Ctrl+C 仍会取消当前对话。
-内置 get_time；mock 下发送 -m /time 可离线观察两轮工具调用。
+内置 get_time、list_files、read_files、subagent；mock 下可用 /time、/ls、/read PATH、/delegate TASK。
+文件工具只读 workspace；默认使用 Agent 的 workspace 目录，可用 --workspace 指定。
 SQLite 保存各用户/会话的消息与运行状态；后续请求加载近期完整的成功对话。
 mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。`)
 		return err
@@ -96,10 +97,11 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 	var message, session, user, after string
 	var limit int
 	var rawJSON bool
-	var providerName, model, envFile string
+	var providerName, model, envFile, workspace string
 	var maxTokens int
 	var readyFD int
 	if command == "serve" || command == "start" {
+		flags.StringVar(&workspace, "workspace", "", "read-only workspace root (default: agent workspace)")
 		flags.StringVar(&envFile, "env-file", ".env", "optional credential file; empty path disables file loading")
 		flags.StringVar(&providerName, "provider", "mock", "model backend: mock or deepseek")
 		flags.StringVar(&model, "model", provider.DefaultDeepSeekModel, "DeepSeek model ID")
@@ -177,6 +179,8 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 		}
 		flags.Visit(func(f *flag.Flag) {
 			switch f.Name {
+			case "workspace":
+				cfg.Workspace = workspace
 			case "provider":
 				cfg.Provider = providerName
 			case "model":
@@ -185,6 +189,16 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 				cfg.MaxTokens = maxTokens
 			}
 		})
+		if workspace != "" {
+			cfg.Workspace, err = filepath.Abs(workspace)
+			if err != nil {
+				return err
+			}
+		} else if cfg.Workspace == "" {
+			cfg.Workspace = paths.Workspace
+		} else if !filepath.IsAbs(cfg.Workspace) {
+			return fmt.Errorf("workspace in agent.json must be an absolute path")
+		}
 		if cfg.Provider != "mock" && cfg.Provider != "deepseek" {
 			return fmt.Errorf("provider must be mock or deepseek")
 		}
@@ -201,7 +215,7 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 			if err := paths.InitConfig(defaults); err != nil {
 				return err
 			}
-			childArgs := []string{"serve", name, "--state-dir", paths.Root, "--provider", cfg.Provider, "--model", cfg.Model, "--max-tokens", strconv.Itoa(cfg.MaxTokens), "--env-file", envFile}
+			childArgs := []string{"serve", name, "--state-dir", paths.Root, "--provider", cfg.Provider, "--model", cfg.Model, "--max-tokens", strconv.Itoa(cfg.MaxTokens), "--env-file", envFile, "--workspace", cfg.Workspace}
 			health, existing, err := daemon.Start(ctx, paths, childArgs)
 			if err != nil {
 				return err
@@ -234,11 +248,15 @@ mock 下发送 -m /recall 可查看当前上下文中的上一条用户消息。
 		if err := paths.InitConfig(defaults); err != nil {
 			return err
 		}
-		tools, err := tool.NewRegistry(tool.Time{})
+		files, err := tool.OpenWorkspace(cfg.Workspace)
 		if err != nil {
 			return err
 		}
-		runtime := agent.New(backend, tools)
+		defer files.Close()
+		runtime, err := agent.NewWithSubagents(backend, tool.Time{}, tool.ReadFiles{Workspace: files}, tool.ListFiles{Workspace: files})
+		if err != nil {
+			return err
+		}
 		var ready func(protocol.Health) error
 		if readyPipe != nil {
 			ready = func(health protocol.Health) error {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"rosetta/internal/llm"
@@ -24,6 +25,18 @@ type Result struct {
 type Tool interface {
 	Spec() llm.ToolSpec
 	Execute(context.Context, string) (Result, error)
+}
+
+// Timeout is trusted tool metadata, never a model-controlled argument.
+func (r *Registry) Timeout(name string, fallback time.Duration) time.Duration {
+	if r != nil {
+		if t, ok := r.tools[name].(interface{ Timeout() time.Duration }); ok {
+			if timeout := t.Timeout(); timeout > 0 && timeout <= time.Minute {
+				return timeout
+			}
+		}
+	}
+	return fallback
 }
 
 // Registry is immutable after construction and safe to share between turns.

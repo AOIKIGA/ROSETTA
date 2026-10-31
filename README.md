@@ -2,11 +2,11 @@
 
 用 Go 开发的个人本地 Agent 项目，同时记录架构决策和学习过程。参考 Agentix 的职责划分，按个人维护成本重新设计。
 
-> 当前阶段（2026-10-29）：C，加载会话历史与限制上下文大小。先读 [让助手记住前面的对话](docs/learning/08-session-context.md)，存储基础见 [第七课](docs/learning/07-storage-and-identity.md)。
+> 当前版本（2026-10-31）：main 已整合文件工具、阻塞式子 Agent、B 的存储和 C 的会话记忆。分支关系和这次整合见 [合并分支](docs/learning/09-merging-branches.md)。
 
-支持 DeepSeek 结构化工具调用与离线 mock，内置 `get_time`。每个 Agent 有独立进程、配置、socket、日志和 SQLite 数据库。会话按 Agent → 用户 → 会话名称划分，保存消息、工具调用及运行状态。**后续请求会加载同一用户、同一会话近期已完成的对话，重启后也有效。** 历史受条数和字节预算限制，目前没有摘要或长期记忆。
+支持 DeepSeek 结构化工具调用与离线 mock，内置 `get_time`、`list_files`、`read_files` 和 `subagent`。每个 Agent 有独立进程、配置、socket、日志和 SQLite 数据库。会话按 Agent → 用户 → 会话名称划分，保存消息、工具调用及运行状态。**后续请求会加载同一用户、同一会话近期已完成的对话，重启后也有效。** 历史受条数和字节预算限制，目前没有摘要或长期记忆。
 
-文件工具与子 Agent 工作已单独保存在 `codex/file-tools-subagents`（`f99b7da`）；B 已提交在 `codex/storage-identity`（`7e89f76`）。这两个分支已推送远端；当前 `codex/session-context` 从 B 开始实现 C，尚未合并文件工具与子 Agent。
+main 同时保留 `.env` / `--env-file` 凭证读取。父会话保存 subagent 的调用与最终结果；子任务仍只接收显式任务说明，不自动继承父历史，也不单独持久化子任务过程。
 
 ## 编译与后台运行
 
@@ -36,6 +36,26 @@ Agent 名称放在选项之前，允许 1–32 位 ASCII 字母、数字、下�
 ```
 
 普通 mock 消息保留模拟回复；`/time` 是离线演示触发词，会走“请求工具 → 执行真实本地 get_time → 交回 Mock → 输出回答”两轮流程。Mock 不调用 AI。进度写 stderr、回答写 stdout；`--json` 将全部事件写为 NDJSON。
+
+## 文件工具与子 Agent
+
+文件工具默认读取 `<state-dir>/agents/<agent>/workspace/`，不会默认读取整个 state dir。也可以指定已有目录：
+
+```sh
+./bin/rosetta stop personal
+./bin/rosetta start personal --provider mock --workspace /Users/aoki/Documents/ROSETTA
+./bin/rosetta chat personal -m /ls
+./bin/rosetta chat personal -m '/read go.mod'
+./bin/rosetta chat personal -m '/delegate /read go.mod'
+```
+
+以上是 mock 离线演示，文件读取和子 Runtime 实际执行，但不会调用 AI。DeepSeek 模式用自然语言提出任务，模型自行选择工具。文件内容作为上下文交给模型；请选择希望助手读取的目录。
+
+`--workspace` 仅覆盖本次运行。要保存默认值，可在 agent.json 中增加绝对路径字段 `workspace`；旧配置不必修改，仍使用 Agent 自己的 workspace。显式相对路径按启动终端所在目录解析，再传给后台进程。
+
+read_files 最多读取四个 UTF-8 普通文件，每个文件最多 1 MiB，支持指定起始行和行数。目录越界、外部符号链接、特殊文件会被拒绝；输出超过限制时标注截断。list_files 不递归，最多 100 项，暂不支持翻页。工具不会写文件或执行 shell。
+
+subagent 工具会启动子任务并等待完成，再把结果交回父模型。子 Agent 只有时间和文件工具，不能继续委派；它没有父会话历史，也不会把中间文字混入父回答。内部已实现 Start/Status/Wait，**尚未开放子任务 CLI status/wait 命令或异步后台任务**；任务记录随父 turn 结束释放。
 
 ## 用户、会话与历史
 
@@ -120,15 +140,16 @@ DEEPSEEK_API_KEY=你的本地密钥
 │   ├── daemon.sock     # 本地 HTTP 通信
 │   ├── daemon.lock     # 生命周期独占锁，停止后保留文件
 │   └── instance.json   # 当前 PID、实例 ID、启动时间；停止时移除
-└── logs/
-    └── daemon.log      # 后台诊断日志，停止后保留
+├── logs/
+│   └── daemon.log      # 后台诊断日志，停止后保留
+└── workspace/         # 默认只读文件工作目录
 ```
 
 每条命令可传同一个 `--state-dir /短路径/私有目录`，该参数始终代表最外层根目录。目录要求私有权限，配置、数据库、锁、实例与日志文件使用 0600。数据库及辅助文件也拒绝符号链接；备份时先停止 Agent，再复制数据库与配置。拒绝 Agent 路径穿越、管理目录/文件的符号链接及过长 socket 路径。status/stop 不会创建不存在的 Agent。
 
 状态查询结合真实进程锁与 socket；不把 PID 文件当作存活依据。stop 通过 socket 指定实例 ID，不会根据过期 PID 杀进程。服务无响应时明确报错，当前没有 force-stop。崩溃后下一次 start 可以清理残留 socket，但不会自动重启。也未实现开机自启、日志轮转或后台 turn 恢复；日志可在停止服务后手动归档。
 
-每个 Agent 最多同时运行 4 个 turn，同一用户下的同一会话一次只能运行一个；不同用户的同名会话可同时运行。每个 turn 最多 6 次模型调用、8 次工具调用，每轮最多 4 个工具；整体超时 2 分钟，单工具 3 秒，工具结果最多 8 KiB，模型输入 JSON 最多 64 KiB。
+每个 Agent 最多同时运行 4 个 turn，同一用户下的同一会话一次只能运行一个；不同用户的同名会话可同时运行。父 Runtime 最多 6 次模型调用、8 次工具调用，每轮最多 4 个工具；最多两个子任务，每个最多 3 次模型调用、4 次工具调用。普通工具超时 3 秒，subagent 最长 1 分钟，父请求整体仍为 2 分钟。工具结果最多 8 KiB，子任务最终结果最多 4096 字节，模型输入 JSON 最多 64 KiB。
 
 本地协议升级为 v4。升级阶段 A 的 v3 后台进程时，先用新版 `rosetta stop [agent]` 关闭，再 start；仅关闭流程兼容 v3，聊天和查询要求 v4。更早的根目录 `<state-dir>/daemon.sock` 服务仍需回到旧 serve 终端停止，新版不接管旧目录。阶段 A 没有持久化消息，无旧聊天记录可迁移。status 的 ready 表示本地服务及数据库初始化完成，不验证远端鉴权和余额。
 
@@ -136,6 +157,8 @@ DEEPSEEK_API_KEY=你的本地密钥
 
 ## 阅读与验证
 
+- [合并分支](docs/learning/09-merging-branches.md)：本次分支关系、冲突处理与 Git 命令。
+- [文件工具与子 Agent](docs/learning/06-file-tools-and-subagents.md)：只读 workspace 和任务委派。
 - [让助手记住前面的对话](docs/learning/08-session-context.md)：历史筛选、完整工具消息与上下文预算。
 - [存储与身份](docs/learning/07-storage-and-identity.md)：阶段 B 的数据库关系和可运行练习。
 - [后台 Daemon 与 Agent 目录](docs/learning/05-agent-daemon-lifecycle.md)：本轮修改、流程和源码阅读顺序。
@@ -148,7 +171,7 @@ DEEPSEEK_API_KEY=你的本地密钥
 make check
 ```
 
-执行 vet 与 race tests；进程集成测试会构建真实 CLI，在临时目录启动 mock daemon，验证终端进程组隔离、聊天取消、双 Agent、并发 start、缺密钥启动失败、停止和崩溃恢复，以及用户/会话/Agent 隔离、重启后历史保留，最后清理临时进程与目录。还通过重启后的 /recall 验证模型输入中的历史隔离。测试覆盖失败轮次排除、工具配对、整轮裁剪和实际请求体预算；不调用真实模型。
+执行 vet 与 race tests；进程集成测试会构建真实 CLI，在临时目录启动 mock daemon，验证终端进程组隔离、聊天取消、双 Agent、并发 start、缺密钥启动失败、停止和崩溃恢复，以及文件读取、子任务委派、用户/会话/Agent 隔离、重启后历史保留，最后清理临时进程与目录。还通过重启后的 /recall 验证模型输入中的历史隔离。测试覆盖失败轮次排除、工具配对、整轮裁剪和实际请求体预算；新增整合测试验证“父历史 → 子任务隔离 → 父结果保存 → 下一次请求加载”，不调用真实模型。
 
 ```text
 cmd/rosetta/          CLI 参数、配置覆盖和组件组装
@@ -162,7 +185,8 @@ internal/conversation/ 加载当前会话历史，连接 Runtime 与消息记录
 internal/agent/      单个 turn 内的 ReAct 循环
 internal/llm/        供应商中立的模型类型
 internal/provider/   DeepSeek 适配器与 Mock
-internal/tool/       工具注册表与 get_time
+internal/tool/       工具注册表、时间、只读文件与子 Agent 工具
+internal/task/       父 turn 内的子任务创建、状态查询与等待
 ```
 
 `module rosetta` 为当前模块名；仓库为 AOIKIGA/ROSETTA，尚未配置自动发布。

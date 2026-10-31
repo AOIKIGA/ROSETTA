@@ -1,6 +1,16 @@
 # 开发路线与协作方式
 
-> 2026-10-29 当前实现：阶段 C，会话历史参与模型输入，按完整 turn 控制上下文预算。课程见 [第八课](learning/08-session-context.md)。
+> 2026-10-31 当前实现：main 整合文件工具/子 Agent、B、C 和 .env 启动凭证读取。合并过程见 [第九课](learning/09-merging-branches.md)。
+
+## 2026-10-30 至 31：把工具分支合入 main
+
+- 合并前 main 位于 4277e74，工具分支位于 f99b7da，共同祖先为 6165fd5。main 有 3 个独有提交，工具分支有 1 个独有提交。
+- 保留 B 的用户/会话存储、C 的历史输入和预算、后续 .env / --env-file 功能；加入 workspace、list_files/read_files 和阻塞式 subagent。
+- 解决 Runtime、CLI、路径与文档冲突。每个父 turn 的 task.Manager 统一在 RunWithHistory 建立，使普通 Run、带记录 Run 与带历史 Run 都能调用子任务。
+- 子 Runtime 不读取父会话历史，也不使用父消息记录回调。父会话保存 subagent 调用和返回结果，后续上下文可以加载这组完整交换；历史工具不会重做。
+- 新增跨模块测试验证历史、子任务、消息保存协作；原有 CLI 测试合并后同时覆盖文件读取、委派、重启历史与 .env 启动。
+- 合并后 `make check`（vet + 全量 race tests）通过；测试使用 mock 和本地服务，未调用真实模型。
+- 2026-10-31 完成本机 `make build` 与关闭 CGO 的 Linux amd64 交叉编译，均通过；Linux 未做运行验证。
 
 ## 2026-10-29：阶段 C，会话上下文
 
@@ -24,6 +34,17 @@
 - 验证：vet、race tests、真实 CLI 重启与身份隔离通过；mock 与本地测试服务验证，无付费模型调用。
 - 构建：本机 `make build` 和关闭 CGO 的 Linux amd64 交叉编译通过；Linux 未做运行验证。
 - 范围：保存和查询历史。阶段 C 才把历史作为模型上下文，并确定失败/中断轮次如何选取、工具配对如何整理以及输入预算。
+
+## 2026-10-24：只读工具与子任务
+
+- 新增 list_files/read_files，固定 workspace 边界、大小限制、逐文件错误与完整 JSON 截断。
+- start/serve 增加 --workspace，配置支持可选的绝对 workspace 路径，旧配置兼容。
+- 新增 task.Manager 的 Start/Status/Wait；subagent 工具先固定 Start 后立即 Wait，子 Runtime 仅有时间和文件工具。
+- 每父 turn 独立任务管理器；最多两个子任务，每个最多三轮模型/四次工具，子任务最长一分钟，整体仍为两分钟。
+- 子任务只有显式任务说明，不继承父消息；仅最终结果进入父模型，取消时等待子任务退出。
+- 验证使用 mock 和本地服务，覆盖目录越界、特殊文件、结构化输出、任务隔离/等待/取消/预算、真实 CLI 通过子 Agent 读文件。
+- 还未实现跨 turn 任务查询、CLI 子任务 status/wait、异步执行、子任务持久化或会话数据库。
+
 
 ## 2026-10-22：阶段 A，Agent 与后台进程
 
